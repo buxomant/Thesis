@@ -4,17 +4,17 @@ import junit.framework.Test;
 import junit.framework.TestCase;
 import junit.framework.TestSuite;
 
-public class AppTest
+public class ApplicationTest
     extends TestCase
 {
-    public AppTest( String testName )
+    public ApplicationTest(String testName )
     {
         super( testName );
     }
 
     public static Test suite()
     {
-        return new TestSuite( AppTest.class );
+        return new TestSuite( ApplicationTest.class );
     }
 
     public void testApp()
