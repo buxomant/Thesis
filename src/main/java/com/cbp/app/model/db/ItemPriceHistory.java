@@ -21,6 +21,11 @@ public class ItemPriceHistory {
     @Column
     private LocalDateTime timeChecked;
 
+    public ItemPriceHistory(@NotNull Item item, @NotNull Float price) {
+        this.item = item;
+        this.price = price;
+    }
+
     public int getId() {
         return id;
     }
