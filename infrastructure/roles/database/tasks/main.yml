@@ -1,0 +1,59 @@
+- name: 'install PostgreSQL 10 repository'
+  yum:
+   name=https://download.postgresql.org/pub/repos/yum/10/redhat/rhel-7-x86_64/pgdg-centos10-10-2.noarch.rpm
+   state=present
+  become: true
+
+- name: 'install PostgreSQL'
+  yum: name=postgresql10-server state=latest
+  become: yes
+
+- name: 'start PostgreSQL on boot'
+  service: name=postgresql-10 enabled=yes
+  become: yes
+
+- name: 'initialise PostgreSQL'
+  command: /usr/pgsql-10/bin/postgresql-10-setup initdb creates=/var/lib/pgsql/10/data/postgresql.conf
+  notify: restart postgresql
+  become: yes
+
+- name: 'listen for remote PostgreSQL connections'
+  lineinfile:
+    dest=/var/lib/pgsql/10/data/postgresql.conf
+    line="listen_addresses = '*'"
+    regexp=listen_addresses
+    state=present
+  notify: restart postgresql
+  become: yes
+  become_user: postgres
+
+- name: 'add permissions for application user'
+  lineinfile:
+    dest=/var/lib/pgsql/10/data/pg_hba.conf
+    line="host {{database.name}} {{database.thesis_user}} 0.0.0.0/0 md5 {{'#'}} {{database.name}}-{{database.thesis_user}}"
+    regexp='{{database.name}}-{{database.thesis_user}}'
+    insertafter='# TYPE'
+    state=present
+  notify: restart postgresql
+  become: true
+
+- name: 'install python PostgreSQL library'
+  yum: name=python-psycopg2 state=latest
+  become: yes
+
+- name: 'ensure PostgreSQL is running'
+  service: name=postgresql-10 state=started
+  become: yes
+
+- name: 'create database'
+  postgresql_db: name={{database.name}}
+  become: yes
+  become_user: postgres
+
+- name: 'add application PostgreSQL user'
+  postgresql_user:
+    db={{database.name}}
+    name={{database.thesis_user}}
+    password={{database.thesis_password}}
+  become: true
+  become_user: postgres

@@ -1,0 +1,6 @@
+env: development
+
+database:
+    name: thesis-{{env}}
+    thesis_user: thesis_user
+    thesis_password: thesis_password

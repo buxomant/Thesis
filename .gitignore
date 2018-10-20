@@ -1,3 +1,8 @@
-lib/*
 .idea/*
+.vagrant/*
+
+lib/*
 target/*
+
+development.retry
+vagrant.log
