@@ -1,28 +1,22 @@
 package com.cbp.app.scheduled;
 
-import com.cbp.app.model.db.ItemPriceHistory;
-import com.cbp.app.repository.ItemPriceHistoryRepository;
 import com.cbp.app.repository.ItemRepository;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.nodes.TextNode;
-import org.jsoup.select.Elements;
+import com.cbp.app.service.ItemPriceService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ItemPriceCheckScheduler {
 
-    private final ItemPriceHistoryRepository itemPriceHistoryRepository;
     private final ItemRepository itemRepository;
+    private final ItemPriceService itemPriceService;
 
     public ItemPriceCheckScheduler(
-        ItemPriceHistoryRepository itemPriceHistoryRepository,
-        ItemRepository itemRepository
+        ItemRepository itemRepository,
+        ItemPriceService itemPriceService
     ) {
-        this.itemPriceHistoryRepository = itemPriceHistoryRepository;
         this.itemRepository = itemRepository;
+        this.itemPriceService = itemPriceService;
     }
 
     private static final int ONE_HOUR_IN_MILLISECONDS = 60 * 60 * 1000;
@@ -31,19 +25,7 @@ public class ItemPriceCheckScheduler {
     public void checkItemPrices() {
         itemRepository.findAll().forEach(item -> {
             try {
-                Document productPage = Jsoup.connect(item.getUrl()).get();
-                Elements priceElements = productPage.select(".product-page-pricing").select(".product-new-price");
-                Element priceElement = priceElements.get(0);
-                String wholePrice = priceElement.textNodes().stream()
-                    .filter(node -> !node.text().trim().equals(""))
-                    .findFirst()
-                    .orElse(new TextNode(""))
-                    .text();
-                String fractionalPrice = priceElement.select("sup").text();
-                String fullPrice = wholePrice + '.' + fractionalPrice;
-
-                ItemPriceHistory itemPriceHistory = new ItemPriceHistory(item, Float.parseFloat(fullPrice));
-                itemPriceHistoryRepository.save(itemPriceHistory);
+                itemPriceService.checkNewItemPrice(item);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

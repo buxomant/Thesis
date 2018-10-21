@@ -5,9 +5,10 @@ import javax.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 
 @Entity
-public class ItemPriceHistory {
+public class ItemPrice {
     @Id
-    private int id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private int itemPriceId;
 
     @ManyToOne
     @NotNull
@@ -19,19 +20,21 @@ public class ItemPriceHistory {
     private Float price;
 
     @Column
-    private LocalDateTime timeChecked;
+    private LocalDateTime timeChecked = LocalDateTime.now();
 
-    public ItemPriceHistory(@NotNull Item item, @NotNull Float price) {
+    public ItemPrice() { }
+
+    public ItemPrice(@NotNull Item item, @NotNull Float price) {
         this.item = item;
         this.price = price;
     }
 
-    public int getId() {
-        return id;
+    public int getItemPriceId() {
+        return itemPriceId;
     }
 
-    public void setId(int id) {
-        this.id = id;
+    public void setItemPriceId(int itemPriceId) {
+        this.itemPriceId = itemPriceId;
     }
 
     public Item getItem() {
@@ -48,5 +51,13 @@ public class ItemPriceHistory {
 
     public void setPrice(Float price) {
         this.price = price;
+    }
+
+    public LocalDateTime getTimeChecked() {
+        return timeChecked;
+    }
+
+    public void setTimeChecked(LocalDateTime timeChecked) {
+        this.timeChecked = timeChecked;
     }
 }

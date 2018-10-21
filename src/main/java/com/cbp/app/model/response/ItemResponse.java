@@ -1,21 +1,19 @@
-package com.cbp.app.model.db;
+package com.cbp.app.model.response;
 
-import javax.persistence.*;
-import javax.validation.constraints.NotBlank;
+import com.cbp.app.model.db.Item;
 
-@Entity
-public class Item {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+public class ItemResponse {
     private int itemId;
-
-    @Column
-    @NotBlank
     private String name;
-
-    @Column
-    @NotBlank
     private String url;
+
+    public ItemResponse() { }
+
+    public ItemResponse(Item item) {
+        this.itemId = item.getItemId();
+        this.name = item.getName();
+        this.url = item.getUrl();
+    }
 
     public int getItemId() {
         return itemId;
