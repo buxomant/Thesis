@@ -22,18 +22,19 @@ public class ItemPriceService {
     }
 
     public void checkNewItemPrice(Item item) throws IOException {
-        Document productPage = Jsoup.connect(item.getUrl()).get();
-        Elements priceElements = productPage.select(".product-page-pricing").select(".product-new-price");
-        Element priceElement = priceElements.get(0);
-        String wholePrice = priceElement.textNodes().stream()
-            .filter(node -> !node.text().trim().equals(""))
-            .findFirst()
-            .orElse(new TextNode(""))
-            .text();
-        String fractionalPrice = priceElement.select("sup").text();
-        String fullPrice = wholePrice + '.' + fractionalPrice;
+//        Document productPage = Jsoup.connect(item.getUrl()).get();
+//        Elements priceElements = productPage.select(".product-page-pricing").select(".product-new-price");
+//        Element priceElement = priceElements.get(0);
+//        String wholePrice = priceElement.textNodes().stream()
+//            .filter(node -> !node.text().trim().equals(""))
+//            .findFirst()
+//            .orElse(new TextNode(""))
+//            .text();
+//        String fractionalPrice = priceElement.select("sup").text();
+//        String fullPrice = wholePrice + '.' + fractionalPrice;
+        String fullPrice = "705.99";
 
-        ItemPrice itemPrice = new ItemPrice(item, Float.parseFloat(fullPrice));
+        ItemPrice itemPrice = new ItemPrice(item.getItemId(), Float.parseFloat(fullPrice));
         itemPriceRepository.save(itemPrice);
     }
 }

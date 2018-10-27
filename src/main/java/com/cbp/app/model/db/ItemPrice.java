@@ -10,10 +10,9 @@ public class ItemPrice {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int itemPriceId;
 
-    @ManyToOne
+    @Column
     @NotNull
-    @JoinColumn(name = "item_id")
-    private Item item;
+    private int itemId;
 
     @Column
     @NotNull
@@ -24,8 +23,8 @@ public class ItemPrice {
 
     public ItemPrice() { }
 
-    public ItemPrice(@NotNull Item item, @NotNull Float price) {
-        this.item = item;
+    public ItemPrice(@NotNull int itemId, @NotNull Float price) {
+        this.itemId = itemId;
         this.price = price;
     }
 
@@ -37,12 +36,12 @@ public class ItemPrice {
         this.itemPriceId = itemPriceId;
     }
 
-    public Item getItem() {
-        return item;
+    public int getItemId() {
+        return itemId;
     }
 
-    public void setItem(Item item) {
-        this.item = item;
+    public void setItemId(int itemId) {
+        this.itemId = itemId;
     }
 
     public Float getPrice() {

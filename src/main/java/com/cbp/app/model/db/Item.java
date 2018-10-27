@@ -7,6 +7,7 @@ import javax.validation.constraints.NotBlank;
 public class Item {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column
     private int itemId;
 
     @Column
@@ -16,6 +17,13 @@ public class Item {
     @Column
     @NotBlank
     private String url;
+
+    public Item() { }
+
+    public Item(@NotBlank String name, @NotBlank String url) {
+        this.name = name;
+        this.url = url;
+    }
 
     public int getItemId() {
         return itemId;

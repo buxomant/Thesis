@@ -5,16 +5,14 @@ import com.cbp.app.model.response.ItemPriceResponse;
 import com.cbp.app.model.response.ItemPricesResponse;
 import com.cbp.app.repository.ItemPriceRepository;
 import com.cbp.app.repository.ItemRepository;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+@CrossOrigin(origins = "http://localhost:8080")
 @RestController
 public class ItemPricesController {
 
@@ -34,7 +32,7 @@ public class ItemPricesController {
         Optional<Item> item = itemRepository.findById(itemId);
         if (item.isPresent()) {
             List<ItemPriceResponse> itemPrices = itemPriceRepository
-                .findAllByItem(item.get())
+                .findAllByItemId(item.get().getItemId())
                 .stream()
                 .map(ItemPriceResponse::new)
                 .collect(Collectors.toList());

@@ -12,7 +12,7 @@ public class ItemPriceResponse {
     public ItemPriceResponse() { }
 
     public ItemPriceResponse(ItemPrice itemPrice) {
-        this.itemId = itemPrice.getItem().getItemId();
+        this.itemId = itemPrice.getItemId();
         this.price = itemPrice.getPrice();
         this.timeChecked = itemPrice.getTimeChecked();
     }
