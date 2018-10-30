@@ -29,10 +29,12 @@ public class ItemPriceService {
 //            .filter(node -> !node.text().trim().equals(""))
 //            .findFirst()
 //            .orElse(new TextNode(""))
-//            .text();
+//            .text()
+//            .replace(".", "");
 //        String fractionalPrice = priceElement.select("sup").text();
 //        String fullPrice = wholePrice + '.' + fractionalPrice;
-        String fullPrice = "705.99";
+        Double price = (500 + Math.random() * (1000 - 500));
+        String fullPrice = price.toString();
 
         ItemPrice itemPrice = new ItemPrice(item.getItemId(), Float.parseFloat(fullPrice));
         itemPriceRepository.save(itemPrice);

@@ -19,7 +19,7 @@ public class ItemPriceCheckScheduler {
         this.itemPriceService = itemPriceService;
     }
 
-    private static final int ONE_HOUR_IN_MILLISECONDS = 60 * 60 * 1000;
+    private static final int ONE_HOUR_IN_MILLISECONDS = 10 * 60 * 1000;
 
     @Scheduled(fixedRate = ONE_HOUR_IN_MILLISECONDS)
     public void checkItemPrices() {
