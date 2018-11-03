@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface ItemPriceRepository extends JpaRepository<ItemPrice, Integer> {
     List<ItemPrice> findAllByItemId(int itemId);
+
+    void deleteAllByItemId(int itemId);
 }

@@ -4,8 +4,10 @@ import com.cbp.app.model.db.Item;
 import com.cbp.app.model.request.ItemRequest;
 import com.cbp.app.model.response.ItemResponse;
 import com.cbp.app.model.response.ItemsResponse;
+import com.cbp.app.repository.ItemPriceRepository;
 import com.cbp.app.repository.ItemRepository;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import javax.validation.Valid;
@@ -18,9 +20,11 @@ import java.util.stream.Collectors;
 public class ItemController {
 
     private final ItemRepository itemRepository;
+    private final ItemPriceRepository itemPriceRepository;
 
-    public ItemController(ItemRepository itemRepository) {
+    public ItemController(ItemRepository itemRepository, ItemPriceRepository itemPriceRepository) {
         this.itemRepository = itemRepository;
+        this.itemPriceRepository = itemPriceRepository;
     }
 
     @RequestMapping(value = "/items", method = RequestMethod.GET)
@@ -58,9 +62,11 @@ public class ItemController {
 
     @RequestMapping(value = "/item/{itemId}", method = RequestMethod.DELETE)
     @ResponseStatus(value = HttpStatus.NO_CONTENT)
+    @Transactional
     public void deleteItem(
         @PathVariable int itemId
     ) {
+        itemPriceRepository.deleteAllByItemId(itemId);
         itemRepository.deleteById(itemId);
     }
 }
