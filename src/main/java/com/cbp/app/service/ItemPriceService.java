@@ -22,19 +22,17 @@ public class ItemPriceService {
     }
 
     public void checkNewItemPrice(Item item) throws IOException {
-//        Document productPage = Jsoup.connect(item.getUrl()).get();
-//        Elements priceElements = productPage.select(".product-page-pricing").select(".product-new-price");
-//        Element priceElement = priceElements.get(0);
-//        String wholePrice = priceElement.textNodes().stream()
-//            .filter(node -> !node.text().trim().equals(""))
-//            .findFirst()
-//            .orElse(new TextNode(""))
-//            .text()
-//            .replace(".", "");
-//        String fractionalPrice = priceElement.select("sup").text();
-//        String fullPrice = wholePrice + '.' + fractionalPrice;
-        Double price = (500 + Math.random() * (1000 - 500));
-        String fullPrice = price.toString();
+        Document productPage = Jsoup.connect(item.getUrl()).get();
+        Elements priceElements = productPage.select(".product-page-pricing").select(".product-new-price");
+        Element priceElement = priceElements.get(0);
+        String wholePrice = priceElement.textNodes().stream()
+            .filter(node -> !node.text().trim().equals(""))
+            .findFirst()
+            .orElse(new TextNode(""))
+            .text()
+            .replace(".", "");
+        String fractionalPrice = priceElement.select("sup").text();
+        String fullPrice = wholePrice + '.' + fractionalPrice;
 
         ItemPrice itemPrice = new ItemPrice(item.getItemId(), Float.parseFloat(fullPrice));
         itemPriceRepository.save(itemPrice);
