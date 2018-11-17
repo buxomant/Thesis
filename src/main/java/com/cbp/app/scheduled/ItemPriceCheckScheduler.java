@@ -5,6 +5,7 @@ import com.cbp.app.model.db.ItemPrice;
 import com.cbp.app.repository.ItemPriceRepository;
 import com.cbp.app.repository.ItemRepository;
 import com.cbp.app.service.ItemPriceService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
@@ -17,15 +18,18 @@ public class ItemPriceCheckScheduler {
     private final ItemRepository itemRepository;
     private final ItemPriceRepository itemPriceRepository;
     private final ItemPriceService itemPriceService;
+    private final boolean jobEnabled;
 
     public ItemPriceCheckScheduler(
         ItemRepository itemRepository,
         ItemPriceRepository itemPriceRepository,
-        ItemPriceService itemPriceService
+        ItemPriceService itemPriceService,
+        @Value("${item-price-check-scheduler.enabled}") boolean jobEnabled
     ) {
         this.itemRepository = itemRepository;
         this.itemPriceRepository = itemPriceRepository;
         this.itemPriceService = itemPriceService;
+        this.jobEnabled = jobEnabled;
     }
 
     private static final int ONE_MINUTE_IN_MILLISECONDS = 60 * 1000;
@@ -33,15 +37,17 @@ public class ItemPriceCheckScheduler {
 
     @Scheduled(fixedRate = ONE_MINUTE_IN_MILLISECONDS)
     public void checkItemPrices() {
-        List<Item> items = itemRepository.findAllItemsThatNeedPriceCheckingInOrder();
-        if (items.size() > 0) {
-            Item item = items.get(0);
-            Optional<ItemPrice> itemPrice = itemPriceRepository.findFirstByItemIdOrderByTimeCheckedDesc(item.getItemId());
-            if (!itemPrice.isPresent() || itemNeedsNewCheck(itemPrice.get())) {
-                try {
-                    itemPriceService.checkNewItemPrice(item);
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
+        if (jobEnabled) {
+            List<Item> items = itemRepository.findAllItemsThatNeedPriceCheckingInOrder();
+            if (items.size() > 0) {
+                Item item = items.get(0);
+                Optional<ItemPrice> itemPrice = itemPriceRepository.findFirstByItemIdOrderByTimeCheckedDesc(item.getItemId());
+                if (!itemPrice.isPresent() || itemNeedsNewCheck(itemPrice.get())) {
+                    try {
+                        itemPriceService.checkNewItemPrice(item);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }
         }
