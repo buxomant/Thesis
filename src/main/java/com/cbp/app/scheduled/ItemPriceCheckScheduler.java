@@ -37,17 +37,19 @@ public class ItemPriceCheckScheduler {
 
     @Scheduled(fixedRate = ONE_MINUTE_IN_MILLISECONDS)
     public void checkItemPrices() {
-        if (jobEnabled) {
-            List<Item> items = itemRepository.findAllItemsThatNeedPriceCheckingInOrder();
-            if (items.size() > 0) {
-                Item item = items.get(0);
-                Optional<ItemPrice> itemPrice = itemPriceRepository.findFirstByItemIdOrderByTimeCheckedDesc(item.getItemId());
-                if (!itemPrice.isPresent() || itemNeedsNewCheck(itemPrice.get())) {
-                    try {
-                        itemPriceService.checkNewItemPrice(item);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
+        if (!jobEnabled) {
+            return;
+        }
+
+        List<Item> items = itemRepository.findAllItemsThatNeedPriceCheckingInOrder();
+        if (items.size() > 0) {
+            Item item = items.get(0);
+            Optional<ItemPrice> itemPrice = itemPriceRepository.findFirstByItemIdOrderByTimeCheckedDesc(item.getItemId());
+            if (!itemPrice.isPresent() || itemNeedsNewCheck(itemPrice.get())) {
+                try {
+                    itemPriceService.checkNewItemPrice(item);
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
                 }
             }
         }

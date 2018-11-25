@@ -1,6 +1,6 @@
 CREATE TABLE website (
   website_id SERIAL PRIMARY KEY,
-  title TEXT NOT NULL,
+  title TEXT,
   url TEXT NOT NULL,
   discovered_on TIMESTAMP NOT NULL,
   last_checked_on TIMESTAMP,
@@ -9,7 +9,7 @@ CREATE TABLE website (
 
 CREATE TABLE page (
   page_id SERIAL PRIMARY KEY,
-  title TEXT NOT NULL,
+  title TEXT,
   url TEXT NOT NULL,
   discovered_on TIMESTAMP NOT NULL,
   last_checked_on TIMESTAMP,

@@ -13,8 +13,13 @@ public class Page {
     private int pageId;
 
     @Column
-    @NotBlank
     private String title;
+
+    @Column
+    private String content;
+
+    @Column
+    private String error;
 
     @Column
     @NotBlank
@@ -36,7 +41,7 @@ public class Page {
     public Page() { }
 
     public Page(
-        @NotBlank String title,
+        String title,
         @NotBlank String url,
         @NotNull LocalDateTime discoveredOn,
         LocalDateTime lastCheckedOn,
@@ -48,6 +53,12 @@ public class Page {
         this.discoveredOn = discoveredOn;
         this.lastCheckedOn = lastCheckedOn;
         this.lastResponseCode = lastResponseCode;
+        this.websiteId = websiteId;
+    }
+
+    public Page(@NotBlank String url, @NotNull LocalDateTime discoveredOn, int websiteId) {
+        this.url = url;
+        this.discoveredOn = discoveredOn;
         this.websiteId = websiteId;
     }
 
@@ -65,6 +76,22 @@ public class Page {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public String getError() {
+        return error;
+    }
+
+    public void setError(String error) {
+        this.error = error;
     }
 
     public String getUrl() {

@@ -16,6 +16,15 @@ public class Website {
     private String title;
 
     @Column
+    private String content;
+
+    @Column
+    private String error;
+
+    @Column
+    private boolean redirectsToExternal;
+
+    @Column
     @NotBlank
     private String url;
 
@@ -65,6 +74,30 @@ public class Website {
 
     public void setTitle(String title) {
         this.title = title;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
+    }
+
+    public String getError() {
+        return error;
+    }
+
+    public void setError(String error) {
+        this.error = error;
+    }
+
+    public boolean getRedirectsToExternal() {
+        return redirectsToExternal;
+    }
+
+    public void setRedirectsToExternal(boolean redirectsToExternal) {
+        this.redirectsToExternal = redirectsToExternal;
     }
 
     public String getUrl() {
