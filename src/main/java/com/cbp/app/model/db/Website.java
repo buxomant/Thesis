@@ -36,6 +36,9 @@ public class Website {
     private LocalDateTime lastCheckedOn;
 
     @Column
+    private LocalDateTime lastProcessedOn;
+
+    @Column
     private Integer lastResponseCode;
 
     public Website() { }
@@ -44,20 +47,6 @@ public class Website {
         this.title = title;
         this.url = url;
         this.discoveredOn = discoveredOn;
-    }
-
-    public Website(
-        String title,
-        @NotBlank String url,
-        @NotBlank LocalDateTime discoveredOn,
-        LocalDateTime lastCheckedOn,
-        Integer lastResponseCode
-    ) {
-        this.title = title;
-        this.url = url;
-        this.discoveredOn = discoveredOn;
-        this.lastCheckedOn = lastCheckedOn;
-        this.lastResponseCode = lastResponseCode;
     }
 
     public int getWebsiteId() {
@@ -122,6 +111,14 @@ public class Website {
 
     public void setLastCheckedOn(LocalDateTime lastCheckedOn) {
         this.lastCheckedOn = lastCheckedOn;
+    }
+
+    public LocalDateTime getLastProcessedOn() {
+        return lastProcessedOn;
+    }
+
+    public void setLastProcessedOn(LocalDateTime lastProcessedOn) {
+        this.lastProcessedOn = lastProcessedOn;
     }
 
     public Integer getLastResponseCode() {

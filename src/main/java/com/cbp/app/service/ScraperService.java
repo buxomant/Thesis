@@ -12,13 +12,13 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.stereotype.Service;
 
 import javax.net.ssl.SSLException;
 import java.io.IOException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -56,48 +56,55 @@ public class ScraperService {
         this.websitePattern = Pattern.compile(".+\\.ro$");
     }
 
-    public void findLinksOnWebsite(Website currentWebsite) throws IOException {
-        Connection connection;
+    public void fetchWebsiteContent(Website currentWebsite) {
+        Connection connection = null;
         Document webPage = null;
         String urlIncludingWwwAndProtocol;
         String url = currentWebsite.getUrl();
         String urlIncludingWww = urlMissingWwwPattern.matcher(url).matches() ? "www." + url : url;
         urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
-        connection = Jsoup.connect(urlIncludingWwwAndProtocol);
 
         try {
+            connection = Jsoup.connect(urlIncludingWwwAndProtocol);
             webPage = connection.get();
         } catch (HttpStatusException | SSLException | SocketException | SocketTimeoutException e) {
             urlIncludingWwwAndProtocol = "http://" + urlIncludingWww;
-            connection = Jsoup.connect(urlIncludingWwwAndProtocol);
-        } catch (UnknownHostException e) {
-            currentWebsite.setLastCheckedOn(LocalDateTime.now());
-            currentWebsite.setLastResponseCode(connection.response().statusCode());
-            websiteRepository.save(currentWebsite);
+        } catch (IOException e) {
+            saveWebsiteError(currentWebsite, connection, e.getMessage());
             return;
         }
 
         if (webPage == null) {
             try {
+                connection = Jsoup.connect(urlIncludingWwwAndProtocol);
                 webPage = connection.get();
             } catch (IOException e) {
-                currentWebsite.setError(e.getMessage());
-                currentWebsite.setLastCheckedOn(LocalDateTime.now());
-                currentWebsite.setLastResponseCode(connection.response().statusCode());
-                websiteRepository.save(currentWebsite);
+                saveWebsiteError(currentWebsite, connection, e.getMessage());
                 return;
             }
         }
 
-        if (!isValidUrl(webPage.baseUri())) {
-            currentWebsite.setLastCheckedOn(LocalDateTime.now());
-            currentWebsite.setLastResponseCode(connection.response().statusCode());
-            currentWebsite.setContent(webPage.toString());
-            currentWebsite.setRedirectsToExternal(true);
-            websiteRepository.save(currentWebsite);
-            return;
-        }
+        boolean redirectsToExternal = !webPage.baseUri().contains(".ro");
+        String cleanContent = webPage.toString().replaceAll("\u0000", "");
+        currentWebsite.setRedirectsToExternal(redirectsToExternal);
+        currentWebsite.setLastCheckedOn(LocalDateTime.now());
+        currentWebsite.setLastResponseCode(connection.response().statusCode());
+        currentWebsite.setContent(cleanContent);
+        websiteRepository.save(currentWebsite);
+    }
 
+    private void saveWebsiteError(Website currentWebsite, Connection connection, String errorMessage) {
+        currentWebsite.setError(errorMessage);
+        currentWebsite.setLastCheckedOn(LocalDateTime.now());
+        if (connection != null) {
+            currentWebsite.setLastResponseCode(connection.response().statusCode());
+        }
+        websiteRepository.save(currentWebsite);
+    }
+
+    public void processWebsite(Website currentWebsite) {
+        String url = currentWebsite.getUrl();
+        Document webPage = Jsoup.parse(currentWebsite.getContent());
         Elements linkElements = webPage.select("a");
 
         Stream<String> links = linkElements.stream()
@@ -109,24 +116,22 @@ public class ScraperService {
             .map(link -> fixLocalLinksAndGlobalLinks(link, url))
             .filter(this::isValidUrl)
             .map(this::stripTrailingSlash)
+            .map(this::stripUselessPrefix)
             .map(this::stripQueryString);
 
         links.forEach(link -> handleLinks(link, url, currentWebsite));
 
-        currentWebsite.setContent(webPage.toString());
-        currentWebsite.setLastCheckedOn(LocalDateTime.now());
-        currentWebsite.setLastResponseCode(connection.response().statusCode());
+        currentWebsite.setLastProcessedOn(LocalDateTime.now());
         websiteRepository.save(currentWebsite);
     }
 
     private void handleLinks(String link, String currentUrl, Website currentWebsite) {
-        if (link.equals(currentUrl)) {
-            return;
-        }
-        if (link.contains(currentUrl)) {
-            handleNewPages(link, currentWebsite);
-        } else if (isValidWebsite(link)) {
-            handleNewWebsites(link, currentWebsite);
+        if (!link.equals(currentUrl)) {
+            if (link.contains(currentUrl)) {
+                handleNewPages(link, currentWebsite);
+            } else if (isValidWebsite(link)) {
+                handleNewWebsites(link, currentWebsite);
+            }
         }
     }
 
@@ -140,9 +145,13 @@ public class ScraperService {
 
     private void handleNewWebsites(String link, Website website) {
         String websiteUrl = stripSubPage(link).toLowerCase();
-        Optional<Website> existingWebsite = websiteRepository.findByUrl(websiteUrl);
-        Website linkedWebsite = existingWebsite.orElseGet(() -> saveNewWebsite(websiteUrl));
-        handleLinksToAndFrom(website, linkedWebsite);
+        try {
+            Optional<Website> existingWebsite = websiteRepository.findByUrl(websiteUrl);
+            Website linkedWebsite = existingWebsite.orElseGet(() -> saveNewWebsite(websiteUrl));
+            handleLinksToAndFrom(website, linkedWebsite);
+        } catch (IncorrectResultSizeDataAccessException e) {
+            e.printStackTrace();
+        }
     }
 
     private void handleLinksToAndFrom(Website websiteFrom, Website websiteTo) {
@@ -161,7 +170,11 @@ public class ScraperService {
     private String stripProtocolPrefix(String link) {
         return link
             .replace("https://", "")
-            .replace("http://", "");
+            .replace("https:/", "")
+            .replace("https:\\\\", "")
+            .replace("http://", "")
+            .replace("http:/", "")
+            .replace("http:\\\\", "");
     }
 
     private String fixLocalLinksAndGlobalLinks(String link, String baseUrl) {
@@ -177,6 +190,12 @@ public class ScraperService {
     private String stripTrailingSlash(String link) {
         return link.endsWith("/")
             ? link.substring(0, link.length() - 1)
+            : link;
+    }
+
+    private String stripUselessPrefix(String link) {
+        return link.startsWith("#")
+            ? link.substring(1, link.length())
             : link;
     }
 
@@ -207,9 +226,18 @@ public class ScraperService {
             && !link.contains("facebook.com")
             && !link.contains("instagram.com")
             && !link.contains("twitter.com")
+            && !link.contains("@")
             && !link.contains("mailto:")
-            && !link.contains("whatsapp://")
+            && !link.contains("mail:")
+            && !link.contains("skype:")
+            && !link.contains("whatsapp:")
             && !link.contains("javascript:")
+            && !link.contains("ftp:")
+            && !link.contains("file:")
+            && !link.contains("mms:")
+            && !link.contains("ts3server:")
+            && !link.contains("steam:")
+            && !link.contains("dchub:")
             && !nonWebResourcePattern.matcher(link).matches();
     }
 

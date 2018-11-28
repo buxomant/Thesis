@@ -33,28 +33,15 @@ public class Page {
     private LocalDateTime lastCheckedOn;
 
     @Column
+    private LocalDateTime lastProcessedOn;
+
+    @Column
     private Integer lastResponseCode;
 
     @Column
     private int websiteId;
 
     public Page() { }
-
-    public Page(
-        String title,
-        @NotBlank String url,
-        @NotNull LocalDateTime discoveredOn,
-        LocalDateTime lastCheckedOn,
-        Integer lastResponseCode,
-        int websiteId
-    ) {
-        this.title = title;
-        this.url = url;
-        this.discoveredOn = discoveredOn;
-        this.lastCheckedOn = lastCheckedOn;
-        this.lastResponseCode = lastResponseCode;
-        this.websiteId = websiteId;
-    }
 
     public Page(@NotBlank String url, @NotNull LocalDateTime discoveredOn, int websiteId) {
         this.url = url;
@@ -120,6 +107,14 @@ public class Page {
 
     public Integer getLastResponseCode() {
         return lastResponseCode;
+    }
+
+    public LocalDateTime getLastProcessedOn() {
+        return lastProcessedOn;
+    }
+
+    public void setLastProcessedOn(LocalDateTime lastProcessedOn) {
+        this.lastProcessedOn = lastProcessedOn;
     }
 
     public void setLastResponseCode(Integer lastResponseCode) {
