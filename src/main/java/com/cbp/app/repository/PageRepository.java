@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface PageRepository extends JpaRepository<Page, Integer> {
     Optional<Page> findByUrl(String url);
 
+    void deleteAllByWebsiteId(Integer websiteId);
+
     @Query(value = "SELECT COUNT(*) FROM page", nativeQuery = true)
     Integer getNumberOfPages();
 }

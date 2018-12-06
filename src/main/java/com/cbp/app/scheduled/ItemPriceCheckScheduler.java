@@ -35,7 +35,7 @@ public class ItemPriceCheckScheduler {
     private static final int ONE_MINUTE_IN_MILLISECONDS = 60 * 1000;
     private static final int PRICE_CHECK_THRESHOLD_IN_HOURS = 1;
 
-    @Scheduled(fixedRate = ONE_MINUTE_IN_MILLISECONDS)
+//    @Scheduled(fixedRate = ONE_MINUTE_IN_MILLISECONDS)
     public void checkItemPrices() {
         if (!jobEnabled) {
             return;

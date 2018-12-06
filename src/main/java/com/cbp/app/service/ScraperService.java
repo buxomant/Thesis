@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -57,6 +58,7 @@ public class ScraperService {
     }
 
     public void fetchWebsiteContent(Website currentWebsite) {
+        System.out.println(">>> fetchWebsiteContent() >>>");
         Connection connection = null;
         Document webPage = null;
         String urlIncludingWwwAndProtocol;
@@ -91,6 +93,7 @@ public class ScraperService {
         currentWebsite.setLastResponseCode(connection.response().statusCode());
         currentWebsite.setContent(cleanContent);
         websiteRepository.save(currentWebsite);
+        System.out.println("<<< fetchWebsiteContent() <<<");
     }
 
     private void saveWebsiteError(Website currentWebsite, Connection connection, String errorMessage) {
@@ -103,6 +106,7 @@ public class ScraperService {
     }
 
     public void processWebsite(Website currentWebsite) {
+        System.out.println(">>> processWebsite() >>>");
         String url = currentWebsite.getUrl();
         Document webPage = Jsoup.parse(currentWebsite.getContent());
         Elements linkElements = webPage.select("a");
@@ -123,6 +127,7 @@ public class ScraperService {
 
         currentWebsite.setLastProcessedOn(LocalDateTime.now());
         websiteRepository.save(currentWebsite);
+        System.out.println("<<< processWebsite() <<<");
     }
 
     private void handleLinks(String link, String currentUrl, Website currentWebsite) {
@@ -224,8 +229,25 @@ public class ScraperService {
     private boolean isValidUrl(String link) {
         return link.contains(".ro")
             && !link.contains("facebook.com")
+            && !link.contains("fb.com")
+            && !link.contains("alexa.com")
+            && !link.contains("last.fm")
+            && !link.contains("google.com")
+            && !link.contains("youtube.com")
+            && !link.contains("pinterest.com")
+            && !link.contains("blogger.com")
+            && !link.contains("linkedin.com")
+            && !link.contains("trustpilot.com")
+            && !link.contains("wordpress.com")
+            && !link.contains("outlook.com")
             && !link.contains("instagram.com")
             && !link.contains("twitter.com")
+            && !link.contains("blogspot.com")
+            && !link.contains("archive.org")
+            && !link.contains("creativecommons.org")
+            && !link.contains("webstatsdomain.com")
+            && !link.contains("webstatsdomain.org")
+            && !link.contains("gov.uk")
             && !link.contains("@")
             && !link.contains("mailto:")
             && !link.contains("mail:")
@@ -243,5 +265,23 @@ public class ScraperService {
 
     private boolean isValidWebsite(String link) {
         return this.websitePattern.matcher(link).matches();
+    }
+
+    public void fixDuplicateWebsite(String websiteUrl) {
+        System.out.println(">>> fixDuplicateWebsite() >>>");
+        List<Website> duplicateWebsites = websiteRepository.findAllByUrlOrderByWebsiteId(websiteUrl);
+        Website earliestWebsite = duplicateWebsites.get(0);
+        duplicateWebsites.forEach(website -> {
+            if (website.getWebsiteId() != earliestWebsite.getWebsiteId()) {
+                pageRepository.deleteAllByWebsiteId(website.getWebsiteId());
+                linksToRepository.deleteAllByWebsiteIdFrom(website.getWebsiteId());
+                linksToRepository.findAllByWebsiteIdTo(website.getWebsiteId()).forEach(linksTo -> {
+                    linksTo.setWebsiteIdTo(earliestWebsite.getWebsiteId());
+                    linksToRepository.save(linksTo);
+                });
+                websiteRepository.delete(website);
+            }
+        });
+        System.out.println("<<< fixDuplicateWebsite() <<<");
     }
 }

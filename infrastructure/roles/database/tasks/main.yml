@@ -8,6 +8,10 @@
   yum: name=postgresql10-server state=latest
   become: yes
 
+- name: 'install PostgreSQL'
+  yum: name=postgresql10-contrib state=latest
+  become: yes
+
 - name: 'start PostgreSQL on boot'
   service: name=postgresql-10 enabled=yes
   become: yes

@@ -6,7 +6,7 @@ import com.cbp.app.repository.PageRepository;
 import com.cbp.app.repository.WebsiteRepository;
 import org.springframework.web.bind.annotation.*;
 
-@CrossOrigin(origins = "http://localhost:8080")
+@CrossOrigin
 @RestController
 public class StatisticsController {
     private final WebsiteRepository websiteRepository;
