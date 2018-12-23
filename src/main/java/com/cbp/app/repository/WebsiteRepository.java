@@ -14,20 +14,21 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
 
     List<Website> findAllByUrlOrderByWebsiteId(String url);
 
-    @Query(value = "SELECT * FROM website " +
-        "WHERE last_checked_on IS NULL " +
-        "ORDER BY discovered_on ASC LIMIT 1", nativeQuery = true)
+    @Query(value = "SELECT * FROM website" +
+        " WHERE last_checked_on IS NULL" +
+        " ORDER BY discovered_on ASC LIMIT 1", nativeQuery = true)
     Optional<Website> getNextUncheckedWebsite();
 
-    @Query(value = "SELECT * FROM website " +
-            "WHERE content IS NOT NULL AND last_processed_on IS NULL " +
-            "ORDER BY discovered_on ASC LIMIT 1", nativeQuery = true)
+    @Query(value = "SELECT * FROM website w " +
+        " WHERE last_processed_on IS NULL" +
+        " AND (SELECT content FROM website_content WHERE website_id = w.website_id) IS NOT NULL" +
+        " ORDER BY discovered_on ASC LIMIT 1", nativeQuery = true)
     Optional<Website> getNextUnprocessedWebsite();
 
     @Query(value = "SELECT url FROM website" +
-            " GROUP BY url" +
-            " HAVING COUNT(url) > 1" +
-            " ORDER BY COUNT(url) DESC LIMIT 1", nativeQuery = true)
+        " GROUP BY url" +
+        " HAVING COUNT(url) > 1" +
+        " ORDER BY COUNT(url) DESC LIMIT 1", nativeQuery = true)
     Optional<String> getNextDuplicateWebsiteUrl();
 
     @Query(value = "SELECT COUNT(*) FROM website", nativeQuery = true)

@@ -3,8 +3,10 @@ package com.cbp.app.service;
 import com.cbp.app.model.db.LinksTo;
 import com.cbp.app.model.db.Page;
 import com.cbp.app.model.db.Website;
+import com.cbp.app.model.db.WebsiteContent;
 import com.cbp.app.repository.LinksToRepository;
 import com.cbp.app.repository.PageRepository;
+import com.cbp.app.repository.WebsiteContentRepository;
 import com.cbp.app.repository.WebsiteRepository;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
@@ -29,6 +31,7 @@ import java.util.stream.Stream;
 @Service
 public class ScraperService {
     private final WebsiteRepository websiteRepository;
+    private final WebsiteContentRepository websiteContentRepository;
     private final PageRepository pageRepository;
     private final LinksToRepository linksToRepository;
     private final Pattern urlMissingWwwPattern;
@@ -42,10 +45,12 @@ public class ScraperService {
     @Autowired
     public ScraperService(
         WebsiteRepository websiteRepository,
+        WebsiteContentRepository websiteContentRepository,
         PageRepository pageRepository,
         LinksToRepository linksToRepository
     ) {
         this.websiteRepository = websiteRepository;
+        this.websiteContentRepository = websiteContentRepository;
         this.pageRepository = pageRepository;
         this.linksToRepository = linksToRepository;
         this.urlMissingWwwPattern = Pattern.compile("^\\w+\\.ro");
@@ -91,8 +96,11 @@ public class ScraperService {
         currentWebsite.setRedirectsToExternal(redirectsToExternal);
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
         currentWebsite.setLastResponseCode(connection.response().statusCode());
-        currentWebsite.setContent(cleanContent);
         websiteRepository.save(currentWebsite);
+
+        WebsiteContent websiteContent = new WebsiteContent(currentWebsite.getWebsiteId(), cleanContent);
+        websiteContentRepository.save(websiteContent);
+
         System.out.println("<<< fetchWebsiteContent() <<<");
     }
 
@@ -108,7 +116,8 @@ public class ScraperService {
     public void processWebsite(Website currentWebsite) {
         System.out.println(">>> processWebsite() >>>");
         String url = currentWebsite.getUrl();
-        Document webPage = Jsoup.parse(currentWebsite.getContent());
+        Optional<WebsiteContent> websiteContent = websiteContentRepository.findById(currentWebsite.getWebsiteId());
+        Document webPage = Jsoup.parse(websiteContent.get().getContent());
         Elements linkElements = webPage.select("a");
 
         Stream<String> links = linkElements.stream()
@@ -169,7 +178,10 @@ public class ScraperService {
 
     private Website saveNewWebsite(String websiteUrl) {
         Website linkedWebsite = new Website(null, websiteUrl, LocalDateTime.now());
-        return websiteRepository.save(linkedWebsite);
+        Website savedWebsite =  websiteRepository.save(linkedWebsite);
+        WebsiteContent websiteContent = new WebsiteContent(savedWebsite.getWebsiteId(), null);
+        websiteContentRepository.save(websiteContent);
+        return savedWebsite;
     }
 
     private String stripProtocolPrefix(String link) {

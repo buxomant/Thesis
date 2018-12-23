@@ -37,7 +37,7 @@ public class WebsiteScraperScheduler {
         this.fixDuplicateWebsitesJobEnabled = fixDuplicateWebsitesJobEnabled;
     }
 
-    @Scheduled(fixedRate = 1000)
+    @Scheduled(fixedRate = 100)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fetchWebsitesContent() throws IOException {
         if (fetchWebsitesJobEnabled) {
@@ -46,7 +46,7 @@ public class WebsiteScraperScheduler {
         }
     }
 
-    @Scheduled(fixedRate = 1000)
+    @Scheduled(fixedRate = 100)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void processWebsites() {
         if (processWebsitesJobEnabled) {
@@ -55,7 +55,7 @@ public class WebsiteScraperScheduler {
         }
     }
 
-    @Scheduled(fixedRate = 1000)
+    @Scheduled(fixedRate = 10000)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fixDuplicateWebsites() {
         if (fixDuplicateWebsitesJobEnabled) {
