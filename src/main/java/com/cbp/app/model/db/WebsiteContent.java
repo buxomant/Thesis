@@ -26,7 +26,6 @@ public class WebsiteContent {
         this.websiteId = websiteId;
     }
 
-
     public String getContent() {
         return content;
     }

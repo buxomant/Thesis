@@ -1,9 +1,12 @@
 package com.cbp.app.service;
 
+import com.cbp.app.helper.LoggingHelper;
 import com.cbp.app.model.db.LinksTo;
 import com.cbp.app.model.db.Page;
 import com.cbp.app.model.db.Website;
 import com.cbp.app.model.db.WebsiteContent;
+import com.cbp.app.model.enumType.WebsiteContentType;
+import com.cbp.app.model.enumType.WebsiteType;
 import com.cbp.app.repository.LinksToRepository;
 import com.cbp.app.repository.PageRepository;
 import com.cbp.app.repository.WebsiteContentRepository;
@@ -22,10 +25,10 @@ import java.io.IOException;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 @Service
@@ -34,41 +37,31 @@ public class ScraperService {
     private final WebsiteContentRepository websiteContentRepository;
     private final PageRepository pageRepository;
     private final LinksToRepository linksToRepository;
-    private final Pattern urlMissingWwwPattern;
-    private final Pattern globalLinkPattern;
-    private final Pattern localLinkPattern;
-    private final Pattern queryStringPattern;
-    private final Pattern subPagePattern;
-    private final Pattern nonWebResourcePattern;
-    private final Pattern websitePattern;
+    private final RegexPatternService regexPatternService;
 
     @Autowired
     public ScraperService(
         WebsiteRepository websiteRepository,
         WebsiteContentRepository websiteContentRepository,
         PageRepository pageRepository,
-        LinksToRepository linksToRepository
+        LinksToRepository linksToRepository,
+        RegexPatternService regexPatternService
     ) {
         this.websiteRepository = websiteRepository;
         this.websiteContentRepository = websiteContentRepository;
         this.pageRepository = pageRepository;
         this.linksToRepository = linksToRepository;
-        this.urlMissingWwwPattern = Pattern.compile("^\\w+\\.ro");
-        this.globalLinkPattern = Pattern.compile("^\\/{2}.+");
-        this.localLinkPattern = Pattern.compile("^\\/.+");
-        this.queryStringPattern = Pattern.compile("(.*)\\?.*");
-        this.subPagePattern = Pattern.compile("(.*\\.ro)/.*");
-        this.nonWebResourcePattern = Pattern.compile(".*\\.(?:bmp|jpg|jpeg|png|gif|svg|pdf|doc|docx|xls|xlsx|ppt|pptx|ashx|xml)$");
-        this.websitePattern = Pattern.compile(".+\\.ro$");
+        this.regexPatternService = regexPatternService;
     }
 
     public void fetchWebsiteContent(Website currentWebsite) {
-        System.out.println(">>> fetchWebsiteContent() >>>");
+        LocalTime startTime = LoggingHelper.logStartOfMethod("fetchWebsiteContent");
+
         Connection connection = null;
         Document webPage = null;
         String urlIncludingWwwAndProtocol;
         String url = currentWebsite.getUrl();
-        String urlIncludingWww = urlMissingWwwPattern.matcher(url).matches() ? "www." + url : url;
+        String urlIncludingWww = regexPatternService.getUrlMissingWwwPattern().matcher(url).matches() ? "www." + url : url;
         urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
 
         try {
@@ -91,17 +84,19 @@ public class ScraperService {
             }
         }
 
-        boolean redirectsToExternal = !webPage.baseUri().contains(".ro");
-        String cleanContent = webPage.toString().replaceAll("\u0000", "");
-        currentWebsite.setRedirectsToExternal(redirectsToExternal);
+        WebsiteType websiteType = getWebsiteType(url, webPage.baseUri());
+        WebsiteContentType websiteContentType = getWebsiteContentType(webPage.baseUri());
+        currentWebsite.setType(websiteType);
+        currentWebsite.setContentType(websiteContentType);
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
         currentWebsite.setLastResponseCode(connection.response().statusCode());
         websiteRepository.save(currentWebsite);
 
+        String cleanContent = webPage.toString().replaceAll("\u0000", "");
         WebsiteContent websiteContent = new WebsiteContent(currentWebsite.getWebsiteId(), cleanContent);
         websiteContentRepository.save(websiteContent);
 
-        System.out.println("<<< fetchWebsiteContent() <<<");
+        LoggingHelper.logEndOfMethod("fetchWebsiteContent", startTime);
     }
 
     private void saveWebsiteError(Website currentWebsite, Connection connection, String errorMessage) {
@@ -114,7 +109,8 @@ public class ScraperService {
     }
 
     public void processWebsite(Website currentWebsite) {
-        System.out.println(">>> processWebsite() >>>");
+        LocalTime startTime = LoggingHelper.logStartOfMethod("processWebsite");
+
         String url = currentWebsite.getUrl();
         Optional<WebsiteContent> websiteContent = websiteContentRepository.findById(currentWebsite.getWebsiteId());
         Document webPage = Jsoup.parse(websiteContent.get().getContent());
@@ -126,8 +122,9 @@ public class ScraperService {
             .filter(this::isNotEmptyOrUseless)
             .map(String::trim)
             .map(this::stripProtocolPrefix)
+            .map(this::stripWwwPrefix)
             .map(link -> fixLocalLinksAndGlobalLinks(link, url))
-            .filter(this::isValidUrl)
+            .filter(this::isValidUrlToKeepTrackOf)
             .map(this::stripTrailingSlash)
             .map(this::stripUselessPrefix)
             .map(this::stripQueryString);
@@ -136,14 +133,15 @@ public class ScraperService {
 
         currentWebsite.setLastProcessedOn(LocalDateTime.now());
         websiteRepository.save(currentWebsite);
-        System.out.println("<<< processWebsite() <<<");
+
+        LoggingHelper.logEndOfMethod("processWebsite", startTime);
     }
 
     private void handleLinks(String link, String currentUrl, Website currentWebsite) {
         if (!link.equals(currentUrl)) {
             if (link.contains(currentUrl)) {
                 handleNewPages(link, currentWebsite);
-            } else if (isValidWebsite(link)) {
+            } else if (isDomesticWebsite(link)) {
                 handleNewWebsites(link, currentWebsite);
             }
         }
@@ -194,11 +192,19 @@ public class ScraperService {
             .replace("http:\\\\", "");
     }
 
-    private String fixLocalLinksAndGlobalLinks(String link, String baseUrl) {
-        if (globalLinkPattern.matcher(link).matches()) {
-            return link.substring(2, link.length());
+    private String stripWwwPrefix(String link) {
+        if (regexPatternService.getUrlIncludingWwwPattern().matcher(link).matches()) {
+            return link.substring(4);
         } else {
-            return localLinkPattern.matcher(link).matches()
+            return link;
+        }
+    }
+
+    private String fixLocalLinksAndGlobalLinks(String link, String baseUrl) {
+        if (regexPatternService.getGlobalLinkPattern().matcher(link).matches()) {
+            return link.substring(2);
+        } else {
+            return regexPatternService.getLocalLinkPattern().matcher(link).matches()
                 ? baseUrl + link
                 : link;
         }
@@ -217,7 +223,7 @@ public class ScraperService {
     }
 
     private String stripQueryString(String link) {
-        Matcher matcher = queryStringPattern.matcher(link);
+        Matcher matcher = regexPatternService.getQueryStringPattern().matcher(link);
         if (matcher.matches()) {
             return matcher.group(1);
         } else {
@@ -226,7 +232,7 @@ public class ScraperService {
     }
 
     private String stripSubPage(String link) {
-        Matcher matcher = subPagePattern.matcher(link);
+        Matcher matcher = regexPatternService.getSubPagePattern().matcher(link);
         if (matcher.matches()) {
             return matcher.group(1);
         } else {
@@ -238,29 +244,8 @@ public class ScraperService {
         return !link.equals("") && !link.equals("/") && !link.equals("#");
     }
 
-    private boolean isValidUrl(String link) {
-        return link.contains(".ro")
-            && !link.contains("facebook.com")
-            && !link.contains("fb.com")
-            && !link.contains("alexa.com")
-            && !link.contains("last.fm")
-            && !link.contains("google.com")
-            && !link.contains("youtube.com")
-            && !link.contains("pinterest.com")
-            && !link.contains("blogger.com")
-            && !link.contains("linkedin.com")
-            && !link.contains("trustpilot.com")
-            && !link.contains("wordpress.com")
-            && !link.contains("outlook.com")
-            && !link.contains("instagram.com")
-            && !link.contains("twitter.com")
-            && !link.contains("blogspot.com")
-            && !link.contains("archive.org")
-            && !link.contains("creativecommons.org")
-            && !link.contains("webstatsdomain.com")
-            && !link.contains("webstatsdomain.org")
-            && !link.contains("gov.uk")
-            && !link.contains("@")
+    private boolean isValidUrlToKeepTrackOf(String link) {
+        return !link.contains("@")
             && !link.contains("mailto:")
             && !link.contains("mail:")
             && !link.contains("skype:")
@@ -272,15 +257,41 @@ public class ScraperService {
             && !link.contains("ts3server:")
             && !link.contains("steam:")
             && !link.contains("dchub:")
-            && !nonWebResourcePattern.matcher(link).matches();
+            && !regexPatternService.getNonWebResourcePattern().matcher(link).matches();
     }
 
-    private boolean isValidWebsite(String link) {
-        return this.websitePattern.matcher(link).matches();
+    private WebsiteType getWebsiteType(String storedUrl, String actualUrl) {
+        if (regexPatternService.getIndexingServicePattern().matcher(actualUrl).matches()) {
+            return WebsiteType.INDEXING_SERVICE;
+        }
+        if (isDomesticWebsite(storedUrl) && !isDomesticWebsite(actualUrl)) {
+            return WebsiteType.REDIRECT_TO_FOREIGN;
+        }
+        if (isDomesticWebsite(actualUrl)) {
+            return WebsiteType.DOMESTIC;
+        } else {
+            return WebsiteType.FOREIGN;
+        }
+    }
+
+    private WebsiteContentType getWebsiteContentType(String url) {
+        if (regexPatternService.getSocialMediaWebsitePattern().matcher(url).matches()) {
+            return WebsiteContentType.SOCIAL_MEDIA;
+        }
+        if (regexPatternService.getDomesticNewsWebsitePattern().matcher(url).matches()) {
+            return WebsiteContentType.NEWS;
+        }
+        return WebsiteContentType.UNCATEGORIZED;
+    }
+
+    private boolean isDomesticWebsite(String url) {
+        return regexPatternService.getDomesticWebsitePattern().matcher(url).matches()
+            || regexPatternService.getDomesticNewsWebsitePattern().matcher(url).matches();
     }
 
     public void fixDuplicateWebsite(String websiteUrl) {
-        System.out.println(">>> fixDuplicateWebsite() >>>");
+        LocalTime startTime = LoggingHelper.logStartOfMethod("fixDuplicateWebsite");
+
         List<Website> duplicateWebsites = websiteRepository.findAllByUrlOrderByWebsiteId(websiteUrl);
         Website earliestWebsite = duplicateWebsites.get(0);
         duplicateWebsites.forEach(website -> {
@@ -294,6 +305,7 @@ public class ScraperService {
                 websiteRepository.delete(website);
             }
         });
-        System.out.println("<<< fixDuplicateWebsite() <<<");
+
+        LoggingHelper.logEndOfMethod("fixDuplicateWebsite", startTime);
     }
 }

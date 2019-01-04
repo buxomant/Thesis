@@ -1,5 +1,8 @@
 package com.cbp.app.model.db;
 
+import com.cbp.app.model.enumType.WebsiteContentType;
+import com.cbp.app.model.enumType.WebsiteType;
+
 import javax.persistence.*;
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.NotNull;
@@ -19,9 +22,6 @@ public class Website {
     private String error;
 
     @Column
-    private boolean redirectsToExternal;
-
-    @Column
     @NotBlank
     private String url;
 
@@ -37,6 +37,14 @@ public class Website {
 
     @Column
     private Integer lastResponseCode;
+
+    @Column
+    @Enumerated(EnumType.STRING)
+    private WebsiteType type;
+
+    @Column
+    @Enumerated(EnumType.STRING)
+    private WebsiteContentType contentType;
 
     public Website() { }
 
@@ -68,14 +76,6 @@ public class Website {
 
     public void setError(String error) {
         this.error = error;
-    }
-
-    public boolean getRedirectsToExternal() {
-        return redirectsToExternal;
-    }
-
-    public void setRedirectsToExternal(boolean redirectsToExternal) {
-        this.redirectsToExternal = redirectsToExternal;
     }
 
     public String getUrl() {
@@ -116,5 +116,21 @@ public class Website {
 
     public void setLastResponseCode(Integer lastResponseCode) {
         this.lastResponseCode = lastResponseCode;
+    }
+
+    public WebsiteType getType() {
+        return type;
+    }
+
+    public void setType(WebsiteType type) {
+        this.type = type;
+    }
+
+    public WebsiteContentType getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(WebsiteContentType contentType) {
+        this.contentType = contentType;
     }
 }

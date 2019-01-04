@@ -31,6 +31,11 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
         " ORDER BY COUNT(url) DESC LIMIT 1", nativeQuery = true)
     Optional<String> getNextDuplicateWebsiteUrl();
 
+    @Query(value = "SELECT COUNT(website_id) FROM website w" +
+        " WHERE w.website_id IN" +
+        "   (SELECT MAX(website_id) FROM website GROUP BY url HAVING COUNT(website_id) > 1)", nativeQuery = true)
+    Integer getNumberOfDuplicateWebsites();
+
     @Query(value = "SELECT COUNT(*) FROM website", nativeQuery = true)
     Integer getNumberOfWebsites();
 
@@ -42,4 +47,25 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
 
     @Query(value = "SELECT COUNT(*) FROM website WHERE error IS NOT NULL", nativeQuery = true)
     Integer getNumberOfWebsitesWithErrors();
+
+    @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'DOMESTIC'", nativeQuery = true)
+    Integer getNumberOfDomesticWebsites();
+
+    @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'FOREIGN'", nativeQuery = true)
+    Integer getNumberOfForeignWebsites();
+
+    @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'REDIRECT_TO_FOREIGN'", nativeQuery = true)
+    Integer getNumberOfRedirectToForeignWebsites();
+
+    @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'INDEXING_SERVICE'", nativeQuery = true)
+    Integer getNumberOfIndexingServiceWebsites();
+
+    @Query(value = "SELECT COUNT(*) FROM website WHERE content_type = 'NEWS'", nativeQuery = true)
+    Integer getNumberOfNewsWebsites();
+
+    @Query(value = "SELECT COUNT(*) FROM website WHERE content_type = 'SOCIAL_MEDIA'", nativeQuery = true)
+    Integer getNumberOfSocialMediaWebsites();
+
+    @Query(value = "SELECT COUNT(*) FROM website WHERE content_type = 'UNCATEGORIZED'", nativeQuery = true)
+    Integer getNumberOfUncategorizedWebsites();
 }

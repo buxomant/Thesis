@@ -1,20 +1,22 @@
 package com.cbp.app.model.response;
 
-public class StatisticsResponse {
+public class CrawlerStatisticsResponse {
     private Integer numberOfWebsites;
+    private Integer numberOfDuplicateWebsites;
     private Integer numberOfCheckedWebsites;
     private Integer numberOfProcessedWebsites;
     private Integer numberOfWebsitesWithErrors;
     private Integer numberOfPages;
     private Integer numberOfLinks;
 
-    public StatisticsResponse() { }
+    public CrawlerStatisticsResponse() { }
 
-    public StatisticsResponse(
+    public CrawlerStatisticsResponse(
         Integer numberOfWebsites,
         Integer numberOfCheckedWebsites,
         Integer numberOfProcessedWebsites,
         Integer numberOfWebsitesWithErrors,
+        Integer numberOfDuplicateWebsites,
         Integer numberOfPages,
         Integer numberOfLinks
     ) {
@@ -22,6 +24,7 @@ public class StatisticsResponse {
         this.numberOfCheckedWebsites = numberOfCheckedWebsites;
         this.numberOfProcessedWebsites = numberOfProcessedWebsites;
         this.numberOfWebsitesWithErrors = numberOfWebsitesWithErrors;
+        this.numberOfDuplicateWebsites = numberOfDuplicateWebsites;
         this.numberOfPages = numberOfPages;
         this.numberOfLinks = numberOfLinks;
     }
@@ -56,6 +59,14 @@ public class StatisticsResponse {
 
     public void setNumberOfWebsitesWithErrors(Integer numberOfWebsitesWithErrors) {
         this.numberOfWebsitesWithErrors = numberOfWebsitesWithErrors;
+    }
+
+    public Integer getNumberOfDuplicateWebsites() {
+        return numberOfDuplicateWebsites;
+    }
+
+    public void setNumberOfDuplicateWebsites(Integer numberOfDuplicateWebsites) {
+        this.numberOfDuplicateWebsites = numberOfDuplicateWebsites;
     }
 
     public Integer getNumberOfPages() {

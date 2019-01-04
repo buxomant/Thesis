@@ -55,7 +55,7 @@ public class WebsiteScraperScheduler {
         }
     }
 
-    @Scheduled(fixedRate = 10000)
+    @Scheduled(fixedRate = 100)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fixDuplicateWebsites() {
         if (fixDuplicateWebsitesJobEnabled) {
