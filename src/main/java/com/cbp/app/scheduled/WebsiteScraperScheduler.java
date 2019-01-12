@@ -1,5 +1,6 @@
 package com.cbp.app.scheduled;
 
+import com.cbp.app.helper.LoggingHelper;
 import com.cbp.app.model.db.Website;
 import com.cbp.app.repository.WebsiteRepository;
 import com.cbp.app.service.ScraperService;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.time.LocalTime;
 import java.util.Optional;
 
 @Component
@@ -21,6 +23,7 @@ public class WebsiteScraperScheduler {
     private final boolean fetchWebsitesJobEnabled;
     private final boolean processWebsitesJobEnabled;
     private final boolean fixDuplicateWebsitesJobEnabled;
+    private final boolean establishSubdomainRelationshipsJobEnabled;
 
     @Autowired
     public WebsiteScraperScheduler(
@@ -28,13 +31,15 @@ public class WebsiteScraperScheduler {
         ScraperService scraperService,
         @Value("${fetch-websites-scheduler.enabled}") boolean fetchWebsitesJobEnabled,
         @Value("${process-websites-scheduler.enabled}") boolean processWebsitesJobEnabled,
-        @Value("${fix-duplicate-websites-scheduler.enabled}") boolean fixDuplicateWebsitesJobEnabled
+        @Value("${fix-duplicate-websites-scheduler.enabled}") boolean fixDuplicateWebsitesJobEnabled,
+        @Value("${establish-subdomain-relationships.enabled}") boolean establishSubdomainRelationshipsJobEnabled
     ) {
         this.websiteRepository = websiteRepository;
         this.scraperService = scraperService;
         this.fetchWebsitesJobEnabled = fetchWebsitesJobEnabled;
         this.processWebsitesJobEnabled = processWebsitesJobEnabled;
         this.fixDuplicateWebsitesJobEnabled = fixDuplicateWebsitesJobEnabled;
+        this.establishSubdomainRelationshipsJobEnabled = establishSubdomainRelationshipsJobEnabled;
     }
 
     @Scheduled(fixedRate = 100)
@@ -61,6 +66,23 @@ public class WebsiteScraperScheduler {
         if (fixDuplicateWebsitesJobEnabled) {
             Optional<String> nextDuplicateWebsiteUrl = websiteRepository.getNextDuplicateWebsiteUrl();
             nextDuplicateWebsiteUrl.ifPresent(scraperService::fixDuplicateWebsite);
+        }
+    }
+
+    @Scheduled(fixedRate = 100)
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public void establishSubdomainRelationships() {
+        if (establishSubdomainRelationshipsJobEnabled) {
+            LocalTime startTime = LoggingHelper.logStartOfMethod("establishSubdomainRelationships");
+
+            Optional<Website> nextWebsite = websiteRepository.getNextWebsiteNotMarkedAsDomainOrSubdomain();
+            if (nextWebsite.isPresent()) {
+                scraperService.establishSubdomainRelationshipsForWebsite(nextWebsite.get());
+            } else {
+                LoggingHelper.logMessage("Could not find any top domains not already processed");
+            }
+
+            LoggingHelper.logEndOfMethod("establishSubdomainRelationships", startTime);
         }
     }
 }

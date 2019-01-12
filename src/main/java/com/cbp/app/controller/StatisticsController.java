@@ -54,6 +54,8 @@ public class StatisticsController {
         Integer numberOfNewsWebsites = websiteRepository.getNumberOfNewsWebsites();
         Integer numberOfSocialMediaWebsites = websiteRepository.getNumberOfSocialMediaWebsites();
         Integer numberOfUncategorizedWebsites = websiteRepository.getNumberOfUncategorizedWebsites();
+        Integer numberOfTopDomains = websiteRepository.getNumberOfTopDomains();
+        Integer numberOfSubDomains = websiteRepository.getNumberOfSubDomains();
 
         return new WebsiteStatisticsResponse(
             numberOfDomesticWebsites,
@@ -62,7 +64,9 @@ public class StatisticsController {
             numberOfIndexingServiceWebsites,
             numberOfNewsWebsites,
             numberOfSocialMediaWebsites,
-            numberOfUncategorizedWebsites
+            numberOfUncategorizedWebsites,
+            numberOfTopDomains,
+            numberOfSubDomains
         );
     }
 }

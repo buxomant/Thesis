@@ -3,6 +3,7 @@ package com.cbp.app.repository;
 import com.cbp.app.model.db.Website;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -30,6 +31,22 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
         " HAVING COUNT(url) > 1" +
         " ORDER BY COUNT(url) DESC LIMIT 1", nativeQuery = true)
     Optional<String> getNextDuplicateWebsiteUrl();
+
+    @Query(value = "SELECT * FROM website w " +
+        "WHERE error IS NULL " +
+        "  AND url NOT LIKE '%.%.%' " +
+        "  AND EXISTS(" +
+        "    SELECT * FROM website" +
+        "    WHERE url LIKE CONCAT('%.', w.url, '%')" +
+        "  ) AND NOT EXISTS(" +
+        "    SELECT * FROM subdomain_of" +
+        "    WHERE website_id_parent = w.website_id OR website_id_child = w.website_id" +
+        "  ) LIMIT 1", nativeQuery = true)
+    Optional<Website> getNextWebsiteNotMarkedAsDomainOrSubdomain();
+
+    @Query(value = "SELECT * FROM website " +
+            "WHERE url LIKE CONCAT('%.', :url, '%')", nativeQuery = true)
+    List<Website> getSubdomainsForUrl(@Param("url") String url);
 
     @Query(value = "SELECT COUNT(website_id) FROM website w" +
         " WHERE w.website_id IN" +
@@ -68,4 +85,12 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
 
     @Query(value = "SELECT COUNT(*) FROM website WHERE content_type = 'UNCATEGORIZED'", nativeQuery = true)
     Integer getNumberOfUncategorizedWebsites();
+
+    @Query(value = "SELECT COUNT(*) FROM website " +
+        "WHERE url NOT LIKE '%.%.%' " +
+        "AND website_id NOT IN (SELECT DISTINCT website_id_child FROM subdomain_of)", nativeQuery = true)
+    Integer getNumberOfTopDomains();
+
+    @Query(value = "SELECT COUNT(*) FROM subdomain_of", nativeQuery = true)
+    Integer getNumberOfSubDomains();
 }

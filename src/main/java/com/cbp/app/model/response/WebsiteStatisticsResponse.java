@@ -8,6 +8,8 @@ public class WebsiteStatisticsResponse {
     private Integer numberOfNewsWebsites;
     private Integer numberOfSocialMediaWebsites;
     private Integer numberOfUncategorizedWebsites;
+    private Integer numberOfTopDomains;
+    private Integer numberOfSubDomains;
 
     public WebsiteStatisticsResponse() { }
 
@@ -18,7 +20,9 @@ public class WebsiteStatisticsResponse {
         Integer numberOfIndexingServiceWebsites,
         Integer numberOfNewsWebsites,
         Integer numberOfSocialMediaWebsites,
-        Integer numberOfUncategorizedWebsites
+        Integer numberOfUncategorizedWebsites,
+        Integer numberOfTopDomains,
+        Integer numberOfSubDomains
     ) {
         this.numberOfDomesticWebsites = numberOfDomesticWebsites;
         this.numberOfForeignWebsites = numberOfForeignWebsites;
@@ -27,6 +31,8 @@ public class WebsiteStatisticsResponse {
         this.numberOfNewsWebsites = numberOfNewsWebsites;
         this.numberOfSocialMediaWebsites = numberOfSocialMediaWebsites;
         this.numberOfUncategorizedWebsites = numberOfUncategorizedWebsites;
+        this.numberOfTopDomains = numberOfTopDomains;
+        this.numberOfSubDomains = numberOfSubDomains;
     }
 
     public Integer getNumberOfDomesticWebsites() {
@@ -83,5 +89,21 @@ public class WebsiteStatisticsResponse {
 
     public void setNumberOfUncategorizedWebsites(Integer numberOfUncategorizedWebsites) {
         this.numberOfUncategorizedWebsites = numberOfUncategorizedWebsites;
+    }
+
+    public Integer getNumberOfTopDomains() {
+        return numberOfTopDomains;
+    }
+
+    public void setNumberOfTopDomains(Integer numberOfTopDomains) {
+        this.numberOfTopDomains = numberOfTopDomains;
+    }
+
+    public Integer getNumberOfSubDomains() {
+        return numberOfSubDomains;
+    }
+
+    public void setNumberOfSubDomains(Integer numberOfSubDomains) {
+        this.numberOfSubDomains = numberOfSubDomains;
     }
 }

@@ -1,16 +1,10 @@
 package com.cbp.app.service;
 
 import com.cbp.app.helper.LoggingHelper;
-import com.cbp.app.model.db.LinksTo;
-import com.cbp.app.model.db.Page;
-import com.cbp.app.model.db.Website;
-import com.cbp.app.model.db.WebsiteContent;
+import com.cbp.app.model.db.*;
 import com.cbp.app.model.enumType.WebsiteContentType;
 import com.cbp.app.model.enumType.WebsiteType;
-import com.cbp.app.repository.LinksToRepository;
-import com.cbp.app.repository.PageRepository;
-import com.cbp.app.repository.WebsiteContentRepository;
-import com.cbp.app.repository.WebsiteRepository;
+import com.cbp.app.repository.*;
 import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
@@ -37,6 +31,7 @@ public class ScraperService {
     private final WebsiteContentRepository websiteContentRepository;
     private final PageRepository pageRepository;
     private final LinksToRepository linksToRepository;
+    private final SubdomainOfRepository subdomainOfRepository;
     private final RegexPatternService regexPatternService;
 
     @Autowired
@@ -45,12 +40,14 @@ public class ScraperService {
         WebsiteContentRepository websiteContentRepository,
         PageRepository pageRepository,
         LinksToRepository linksToRepository,
+        SubdomainOfRepository subdomainOfRepository,
         RegexPatternService regexPatternService
     ) {
         this.websiteRepository = websiteRepository;
         this.websiteContentRepository = websiteContentRepository;
         this.pageRepository = pageRepository;
         this.linksToRepository = linksToRepository;
+        this.subdomainOfRepository = subdomainOfRepository;
         this.regexPatternService = regexPatternService;
     }
 
@@ -307,5 +304,13 @@ public class ScraperService {
         });
 
         LoggingHelper.logEndOfMethod("fixDuplicateWebsite", startTime);
+    }
+
+    public void establishSubdomainRelationshipsForWebsite(Website website) {
+        List<Website> websiteSubdomains = websiteRepository.getSubdomainsForUrl(website.getUrl());
+        websiteSubdomains.forEach(subdomain -> {
+            SubdomainOf subdomainRelationship = new SubdomainOf(website.getWebsiteId(), subdomain.getWebsiteId());
+            subdomainOfRepository.save(subdomainRelationship);
+        });
     }
 }
