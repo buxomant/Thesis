@@ -46,12 +46,18 @@ public class Website {
     @Enumerated(EnumType.STRING)
     private WebsiteContentType contentType;
 
+    @Column
+    private Integer fetchEveryNumberOfHours;
+
+    private static final Integer DEFAULT_FETCH_EVERY_NUMBER_OF_HOURS = 8760;
+
     public Website() { }
 
     public Website(String title, @NotBlank String url, @NotBlank LocalDateTime discoveredOn) {
         this.title = title;
         this.url = url;
         this.discoveredOn = discoveredOn;
+        this.fetchEveryNumberOfHours = DEFAULT_FETCH_EVERY_NUMBER_OF_HOURS;
     }
 
     public int getWebsiteId() {
@@ -132,5 +138,13 @@ public class Website {
 
     public void setContentType(WebsiteContentType contentType) {
         this.contentType = contentType;
+    }
+
+    public Integer getFetchEveryNumberOfHours() {
+        return fetchEveryNumberOfHours;
+    }
+
+    public void setFetchEveryNumberOfHours(Integer fetchEveryNumberOfHours) {
+        this.fetchEveryNumberOfHours = fetchEveryNumberOfHours;
     }
 }

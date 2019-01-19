@@ -16,15 +16,16 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
     List<Website> findAllByUrlOrderByWebsiteId(String url);
 
     @Query(value = "SELECT * FROM website" +
-        " WHERE last_checked_on IS NULL" +
-        " ORDER BY discovered_on ASC LIMIT 1", nativeQuery = true)
-    Optional<Website> getNextUncheckedWebsite();
+        " WHERE type = 'DOMESTIC'" +
+        "   AND last_checked_on + INTERVAL '1' HOUR * fetch_every_number_of_hours < now()" +
+        " ORDER BY last_checked_on ASC LIMIT 1", nativeQuery = true)
+    Optional<Website> getNextDomesticWebsiteThatNeedsFetching();
 
-    @Query(value = "SELECT * FROM website w " +
-        " WHERE last_processed_on IS NULL" +
-        " AND (SELECT content FROM website_content WHERE website_id = w.website_id) IS NOT NULL" +
-        " ORDER BY discovered_on ASC LIMIT 1", nativeQuery = true)
-    Optional<Website> getNextUnprocessedWebsite();
+    @Query(value = "SELECT * FROM website JOIN website_content USING (website_id)" +
+        " WHERE time_processed IS NULL" +
+        "   AND type = 'DOMESTIC'" +
+        " ORDER BY time_fetched ASC LIMIT 1", nativeQuery = true)
+    Optional<Website> getNextDomesticWebsiteThatNeedsProcessing();
 
     @Query(value = "SELECT url FROM website" +
         " GROUP BY url" +

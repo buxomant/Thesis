@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface WebsiteContentRepository extends JpaRepository<WebsiteContent, Integer> {
+    WebsiteContent getFirstByWebsiteIdAndTimeProcessedIsNull(Integer websiteId);
 }

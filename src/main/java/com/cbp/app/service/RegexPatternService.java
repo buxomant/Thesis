@@ -6,25 +6,45 @@ import java.util.regex.Pattern;
 @Service
 public class RegexPatternService {
     private final Pattern urlMissingWwwPattern;
-    private final Pattern urlIncludingWwwPattern;
     private final Pattern globalLinkPattern;
     private final Pattern localLinkPattern;
     private final Pattern queryStringPattern;
     private final Pattern subPagePattern;
     private final Pattern nonWebResourcePattern;
+    private final Pattern nonWebProtocolPattern;
     private final Pattern domesticWebsitePattern;
     private final Pattern domesticNewsWebsitePattern;
     private final Pattern socialMediaWebsitePattern;
     private final Pattern indexingServicePattern;
 
     public RegexPatternService() {
-        this.urlMissingWwwPattern = Pattern.compile("^\\w+\\.ro");
-        this.urlIncludingWwwPattern = Pattern.compile("^www\\..*");
+        this.urlMissingWwwPattern = Pattern.compile("^\\w+\\.\\w+");
         this.globalLinkPattern = Pattern.compile("^\\/{2}.+");
         this.localLinkPattern = Pattern.compile("^\\/.+");
         this.queryStringPattern = Pattern.compile("(.*)\\?.*");
-        this.subPagePattern = Pattern.compile("(.*\\.ro)/.*");
-        this.nonWebResourcePattern = Pattern.compile(".*\\.(?:bmp|jpg|jpeg|png|gif|svg|pdf|doc|docx|xls|xlsx|ppt|pptx|ashx|xml)$");
+        this.subPagePattern = Pattern.compile("(.*\\.\\w+)/.*");
+        this.nonWebResourcePattern = Pattern.compile(".*\\.(?:" +
+            "bmp" +
+            "|jpg" +
+            "|jpeg" +
+            "|png" +
+            "|gif" +
+            "|svg" +
+            "|pdf" +
+            "|doc" +
+            "|docx" +
+            "|xls" +
+            "|xlsx" +
+            "|ppt" +
+            "|pptx" +
+            "|ashx" +
+            "|xml" +
+            "|m3u" +
+            "|pls" +
+            "|zip" +
+            "|rar" +
+            ")$");
+        this.nonWebProtocolPattern = Pattern.compile("^(mailto|mail|skype|whatsapp|javascript|file|data|mms|ts3server|steam|dchub|tel|fax|webcal|callto|viber|samp|irc):.*");
         this.domesticWebsitePattern = Pattern.compile(".+\\.ro.*");
         this.domesticNewsWebsitePattern = Pattern.compile(
             ".*adevarul\\.ro.*" +
@@ -73,12 +93,16 @@ public class RegexPatternService {
         );
         this.indexingServicePattern = Pattern.compile(
             ".*google\\.com.*" +
+            "^google\\..*" +
             "|.*alexa\\.com.*" +
             "|.*blogger\\.com.*" +
             "|.*trustpilot\\.com.*" +
             "|.*wordpress\\.com.*" +
             "|.*outlook\\.com.*" +
             "|.*blogspot\\.com.*" +
+            "|.*blogspot\\.ro.*" +
+            "|.*pe-harta\\.ro.*" +
+            "|.*nym\\.ro.*" +
             "|.*archive\\.org.*" +
             "|.*creativecommons\\.org.*" +
             "|.*webstatsdomain\\.org.*" +
@@ -89,10 +113,6 @@ public class RegexPatternService {
 
     public Pattern getUrlMissingWwwPattern() {
         return urlMissingWwwPattern;
-    }
-
-    public Pattern getUrlIncludingWwwPattern() {
-        return urlIncludingWwwPattern;
     }
 
     public Pattern getGlobalLinkPattern() {
@@ -113,6 +133,10 @@ public class RegexPatternService {
 
     public Pattern getNonWebResourcePattern() {
         return nonWebResourcePattern;
+    }
+
+    public Pattern getNonWebProtocolPattern() {
+        return nonWebProtocolPattern;
     }
 
     public Pattern getDomesticWebsitePattern() {

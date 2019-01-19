@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.time.LocalTime;
 import java.util.Optional;
 
 @Component
@@ -46,7 +45,7 @@ public class WebsiteScraperScheduler {
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fetchWebsitesContent() throws IOException {
         if (fetchWebsitesJobEnabled) {
-            Optional<Website> nextUncheckedWebsite = websiteRepository.getNextUncheckedWebsite();
+            Optional<Website> nextUncheckedWebsite = websiteRepository.getNextDomesticWebsiteThatNeedsFetching();
             nextUncheckedWebsite.ifPresent(scraperService::fetchWebsiteContent);
         }
     }
@@ -55,12 +54,12 @@ public class WebsiteScraperScheduler {
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void processWebsites() {
         if (processWebsitesJobEnabled) {
-            Optional<Website> nextUnprocessedWebsite = websiteRepository.getNextUnprocessedWebsite();
+            Optional<Website> nextUnprocessedWebsite = websiteRepository.getNextDomesticWebsiteThatNeedsProcessing();
             nextUnprocessedWebsite.ifPresent(scraperService::processWebsite);
         }
     }
 
-    @Scheduled(fixedRate = 100)
+    @Scheduled(fixedRate = 1000)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fixDuplicateWebsites() {
         if (fixDuplicateWebsitesJobEnabled) {
@@ -69,20 +68,12 @@ public class WebsiteScraperScheduler {
         }
     }
 
-    @Scheduled(fixedRate = 100)
+    @Scheduled(fixedRate = 10000)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void establishSubdomainRelationships() {
         if (establishSubdomainRelationshipsJobEnabled) {
-            LocalTime startTime = LoggingHelper.logStartOfMethod("establishSubdomainRelationships");
-
             Optional<Website> nextWebsite = websiteRepository.getNextWebsiteNotMarkedAsDomainOrSubdomain();
-            if (nextWebsite.isPresent()) {
-                scraperService.establishSubdomainRelationshipsForWebsite(nextWebsite.get());
-            } else {
-                LoggingHelper.logMessage("Could not find any top domains not already processed");
-            }
-
-            LoggingHelper.logEndOfMethod("establishSubdomainRelationships", startTime);
+            nextWebsite.ifPresent(scraperService::establishSubdomainRelationshipsForWebsite);
         }
     }
 }

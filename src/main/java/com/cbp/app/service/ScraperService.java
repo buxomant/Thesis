@@ -90,9 +90,13 @@ public class ScraperService {
         websiteRepository.save(currentWebsite);
 
         String cleanContent = webPage.toString().replaceAll("\u0000", "");
-        WebsiteContent websiteContent = new WebsiteContent(currentWebsite.getWebsiteId(), cleanContent);
-        websiteContentRepository.save(websiteContent);
+        if (cleanContent != null && !cleanContent.equals("")) {
+            WebsiteContent websiteContent = new WebsiteContent(currentWebsite.getWebsiteId(), cleanContent);
+            websiteContent.setTimeFetched(LocalDateTime.now());
+            websiteContentRepository.save(websiteContent);
+        }
 
+        LoggingHelper.logMessage("Fetched website: " + currentWebsite.getUrl());
         LoggingHelper.logEndOfMethod("fetchWebsiteContent", startTime);
     }
 
@@ -109,28 +113,31 @@ public class ScraperService {
         LocalTime startTime = LoggingHelper.logStartOfMethod("processWebsite");
 
         String url = currentWebsite.getUrl();
-        Optional<WebsiteContent> websiteContent = websiteContentRepository.findById(currentWebsite.getWebsiteId());
-        Document webPage = Jsoup.parse(websiteContent.get().getContent());
+        WebsiteContent websiteContent = websiteContentRepository.getFirstByWebsiteIdAndTimeProcessedIsNull(currentWebsite.getWebsiteId());
+        Document webPage = Jsoup.parse(websiteContent.getContent());
         Elements linkElements = webPage.select("a");
 
         Stream<String> links = linkElements.stream()
             .map(link -> link.attr("href"))
             .distinct()
-            .filter(this::isNotEmptyOrUseless)
             .map(String::trim)
             .map(this::stripProtocolPrefix)
             .map(this::stripWwwPrefix)
             .map(link -> fixLocalLinksAndGlobalLinks(link, url))
-            .filter(this::isValidUrlToKeepTrackOf)
+            .filter(this::isValidWebUrl)
             .map(this::stripTrailingSlash)
             .map(this::stripUselessPrefix)
-            .map(this::stripQueryString);
+            .map(this::stripQueryString)
+            .filter(this::isNotEmptyOrUseless);
 
         links.forEach(link -> handleLinks(link, url, currentWebsite));
 
         currentWebsite.setLastProcessedOn(LocalDateTime.now());
         websiteRepository.save(currentWebsite);
 
+        websiteContent.setTimeProcessed(LocalDateTime.now());
+
+        LoggingHelper.logMessage("Processed website: " + currentWebsite.getUrl());
         LoggingHelper.logEndOfMethod("processWebsite", startTime);
     }
 
@@ -138,7 +145,7 @@ public class ScraperService {
         if (!link.equals(currentUrl)) {
             if (link.contains(currentUrl)) {
                 handleNewPages(link, currentWebsite);
-            } else if (isDomesticWebsite(link)) {
+            } else {
                 handleNewWebsites(link, currentWebsite);
             }
         }
@@ -173,24 +180,33 @@ public class ScraperService {
 
     private Website saveNewWebsite(String websiteUrl) {
         Website linkedWebsite = new Website(null, websiteUrl, LocalDateTime.now());
-        Website savedWebsite =  websiteRepository.save(linkedWebsite);
-        WebsiteContent websiteContent = new WebsiteContent(savedWebsite.getWebsiteId(), null);
-        websiteContentRepository.save(websiteContent);
-        return savedWebsite;
+        WebsiteType websiteType = getWebsiteType(websiteUrl, websiteUrl);
+        WebsiteContentType websiteContentType = getWebsiteContentType(websiteUrl);
+        linkedWebsite.setType(websiteType);
+        linkedWebsite.setContentType(websiteContentType);
+
+        return websiteRepository.save(linkedWebsite);
+//        WebsiteContent websiteContent = new WebsiteContent(savedWebsite.getWebsiteId(), null);
+//        websiteContentRepository.save(websiteContent);
+//        return savedWebsite;
     }
 
     private String stripProtocolPrefix(String link) {
         return link
+            .replace("https//", "")
             .replace("https://", "")
             .replace("https:/", "")
             .replace("https:\\\\", "")
+            .replace("https:\\", "")
+            .replace("http//", "")
             .replace("http://", "")
             .replace("http:/", "")
-            .replace("http:\\\\", "");
+            .replace("http:\\\\", "")
+            .replace("http:\\", "");
     }
 
     private String stripWwwPrefix(String link) {
-        if (regexPatternService.getUrlIncludingWwwPattern().matcher(link).matches()) {
+        if (link.startsWith("www.")) {
             return link.substring(4);
         } else {
             return link;
@@ -241,19 +257,9 @@ public class ScraperService {
         return !link.equals("") && !link.equals("/") && !link.equals("#");
     }
 
-    private boolean isValidUrlToKeepTrackOf(String link) {
-        return !link.contains("@")
-            && !link.contains("mailto:")
-            && !link.contains("mail:")
-            && !link.contains("skype:")
-            && !link.contains("whatsapp:")
-            && !link.contains("javascript:")
-            && !link.contains("ftp:")
-            && !link.contains("file:")
-            && !link.contains("mms:")
-            && !link.contains("ts3server:")
-            && !link.contains("steam:")
-            && !link.contains("dchub:")
+    private boolean isValidWebUrl(String link) {
+        return link.contains("@")
+            && !regexPatternService.getNonWebProtocolPattern().matcher(link).matches()
             && !regexPatternService.getNonWebResourcePattern().matcher(link).matches();
     }
 
@@ -299,6 +305,15 @@ public class ScraperService {
                     linksTo.setWebsiteIdTo(earliestWebsite.getWebsiteId());
                     linksToRepository.save(linksTo);
                 });
+                subdomainOfRepository.findAllByWebsiteIdParent(website.getWebsiteId()).forEach(subdomainOf -> {
+                    subdomainOf.setWebsiteIdParent(earliestWebsite.getWebsiteId());
+                    subdomainOfRepository.save(subdomainOf);
+                });
+                subdomainOfRepository.findAllByWebsiteIdChild(website.getWebsiteId()).forEach(subdomainOf -> {
+                    subdomainOf.setWebsiteIdChild(earliestWebsite.getWebsiteId());
+                    subdomainOfRepository.save(subdomainOf);
+                });
+
                 websiteRepository.delete(website);
             }
         });
@@ -307,10 +322,14 @@ public class ScraperService {
     }
 
     public void establishSubdomainRelationshipsForWebsite(Website website) {
+        LocalTime startTime = LoggingHelper.logStartOfMethod("establishSubdomainRelationshipsForWebsite");
+
         List<Website> websiteSubdomains = websiteRepository.getSubdomainsForUrl(website.getUrl());
         websiteSubdomains.forEach(subdomain -> {
             SubdomainOf subdomainRelationship = new SubdomainOf(website.getWebsiteId(), subdomain.getWebsiteId());
             subdomainOfRepository.save(subdomainRelationship);
         });
+
+        LoggingHelper.logEndOfMethod("establishSubdomainRelationshipsForWebsite", startTime);
     }
 }
