@@ -42,7 +42,7 @@ public class WebsiteScraperScheduler {
         this.establishSubdomainRelationshipsJobEnabled = establishSubdomainRelationshipsJobEnabled;
     }
 
-    @Scheduled(fixedRate = 100000) // qq change back
+    @Scheduled(fixedRate = 100)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fetchWebsitesContent() throws IOException {
         if (fetchWebsitesJobEnabled) {

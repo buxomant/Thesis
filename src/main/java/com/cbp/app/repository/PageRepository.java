@@ -12,6 +12,8 @@ import java.util.Optional;
 public interface PageRepository extends JpaRepository<Page, Integer> {
     Optional<Page> findByUrl(String url);
 
+    List<Page> findAllByUrlIn(List<String> urls);
+
     List<Page> findAllByUrlOrderByPageId(String url);
 
     void deleteAllByWebsiteId(Integer websiteId);

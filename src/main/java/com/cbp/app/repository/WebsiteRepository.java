@@ -15,6 +15,8 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
 
     List<Website> findAllByUrlOrderByWebsiteId(String url);
 
+    List<Website> findAllByUrlIn(List<String> urls);
+
     @Query(value = "SELECT * FROM website" +
         " WHERE type = 'DOMESTIC'" +
         "   AND last_checked_on + INTERVAL '1' HOUR * fetch_every_number_of_hours < now()" +

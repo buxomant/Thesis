@@ -22,7 +22,7 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 @Service
 public class ScraperService {
@@ -119,10 +119,10 @@ public class ScraperService {
         Document webPage = Jsoup.parse(websiteContent.getContent());
         Elements linkElements = webPage.select("a");
 
-        Stream<String> links = linkElements.stream()
+        List<String> links = linkElements.stream()
             .map(link -> link.attr("href"))
-            .distinct()
             .map(String::trim)
+            .map(String::toLowerCase)
             .map(this::stripProtocolPrefix)
             .map(this::stripWwwPrefix)
             .map(this::trimNonAlphanumericContent)
@@ -130,96 +130,75 @@ public class ScraperService {
             .map(this::stripQueryString)
             .map(link -> convertLocalLinksAndGlobalLinks(link, url))
             .filter(this::isValidWebUrl)
-            .filter(this::isNotEmptyOrUseless);
+            .filter(this::isNotEmptyOrUseless)
+            .distinct()
+            .collect(Collectors.toList());
 
-        links.forEach(link -> processLink(link, url, websiteContent));
+        processLinks(links, currentWebsite, websiteContent);
 
         currentWebsite.setLastProcessedOn(LocalDateTime.now());
         websiteRepository.save(currentWebsite);
 
         websiteContent.setTimeProcessed(LocalDateTime.now());
+        websiteContentRepository.save(websiteContent);
 
         LoggingHelper.logMessage("Processed website: " + currentWebsite.getUrl());
         LoggingHelper.logEndOfMethod("processWebsite", startTime);
     }
 
-    private void processLink(
-        String link,
-        String currentUrl,
-        WebsiteContent websiteContent
-    ) {
-        if (!link.equals(currentUrl)) {
-            saveWebsiteIfNotSeenBefore(link, websiteContent);
-            savePageIfNotSeenBefore(currentUrl, link, websiteContent);
-        }
-    }
+    private void processLinks(List<String> links, Website currentWebsite, WebsiteContent websiteContent) {
+        List<Website> allWebsites = links.stream()
+            .map(this::stripSubPage)
+            .distinct()
+            .map(this::createNewWebsite)
+            .collect(Collectors.toList());
+        List<String> websiteUrls = allWebsites.stream().map(Website::getUrl).collect(Collectors.toList());
+        List<Website> existingWebsites = websiteRepository.findAllByUrlIn(websiteUrls);
+        List<String> existingWebsiteUrls = existingWebsites.stream().map(Website::getUrl).collect(Collectors.toList());
+        List<Website> newWebsites = allWebsites.stream().filter(website -> !existingWebsiteUrls.contains(website.getUrl())).collect(Collectors.toList());
 
-    private void savePageIfNotSeenBefore(String pageUrl, String link, WebsiteContent websiteContent) {
-        List<Page> pagesMatchingUrl = pageRepository.findAllByUrlOrderByPageId(pageUrl);
+        List<Website> savedNewWebsites = websiteRepository.saveAll(newWebsites);
+        existingWebsites.addAll(savedNewWebsites);
+
+        List<WebsiteToWebsite> websiteToWebsites = existingWebsites.stream()
+            .map(website -> new WebsiteToWebsite(websiteContent.getWebsiteId(), website.getWebsiteId(), websiteContent.getContentId()))
+            .collect(Collectors.toList());
+        websiteToWebsiteRepository.saveAll(websiteToWebsites);
+
+        List<Page> pages = allWebsites.stream()
+            .map(this::createNewPageForWebsiteHomePage)
+            .collect(Collectors.toList());
+        List<String> pageUrls = pages.stream().map(Page::getUrl).collect(Collectors.toList());
+        List<Page> existingPages = pageRepository.findAllByUrlIn(pageUrls);
+        List<String> existingPagesUrls = existingPages.stream().map(Page::getUrl).collect(Collectors.toList());
+        List<Page> newPages = pages.stream().filter(page -> !existingPagesUrls.contains(page.getUrl())).collect(Collectors.toList());
+
+        List<Page> savedNewPages = pageRepository.saveAll(newPages);
+        existingPages.addAll(savedNewPages);
+
+        List<Page> pagesMatchingUrl = pageRepository.findAllByUrlOrderByPageId(currentWebsite.getUrl());
         Page currentPage = pagesMatchingUrl.size() > 0
             ? fixDuplicatePage(pagesMatchingUrl)
-            : saveNewPage(pageUrl, websiteContent.getWebsiteId());
+            : createNewPageForWebsiteHomePage(websiteRepository.getOne(websiteContent.getWebsiteId()));
 
-        List<Page> linkedPagesMatchingUrl = pageRepository.findAllByUrlOrderByPageId(link);
-        Page linkedPage = linkedPagesMatchingUrl.size() > 0
-            ? fixDuplicatePage(linkedPagesMatchingUrl)
-            : saveNewPage(link, websiteContent.getWebsiteId());
+        List<PageToPage> pageToPages = existingPages.stream()
+            .map(page -> new PageToPage(currentPage.getPageId(), page.getPageId(), websiteContent.getContentId()))
+            .collect(Collectors.toList());
 
-        createPageToPageLink(currentPage, linkedPage, websiteContent.getContentId());
+        pageToPageRepository.saveAll(pageToPages);
     }
 
-    private void saveWebsiteIfNotSeenBefore(String link, WebsiteContent websiteContent) {
-        String websiteUrl = stripSubPage(link).toLowerCase();
-
-        List<Website> websitesMatchingUrl = websiteRepository.findAllByUrlOrderByWebsiteId(websiteUrl);
-        Website linkedWebsite = websitesMatchingUrl.size() > 0
-            ? fixDuplicateWebsite(websitesMatchingUrl)
-            : saveNewWebsite(websiteUrl);
-
-        createWebsiteToWebsiteLink(websiteContent, linkedWebsite);
-    }
-
-    private void createWebsiteToWebsiteLink(WebsiteContent websiteContent, Website linkedWebsite) {
-        if (websiteContent.getWebsiteId() != linkedWebsite.getWebsiteId()) {
-            Optional<WebsiteToWebsite> existingLink = websiteToWebsiteRepository.findByWebsiteIdFromAndWebsiteIdToAndContentId(
-                websiteContent.getWebsiteId(),
-                linkedWebsite.getWebsiteId(),
-                websiteContent.getContentId()
-            );
-            if (!existingLink.isPresent()) {
-                WebsiteToWebsite websiteToWebsite = new WebsiteToWebsite(
-                    websiteContent.getWebsiteId(),
-                    linkedWebsite.getWebsiteId(),
-                    websiteContent.getContentId()
-                );
-                websiteToWebsiteRepository.save(websiteToWebsite);
-            }
-        }
-    }
-
-    private void createPageToPageLink(Page page, Page linkedPage, int contentId) {
-        if (page.getPageId() != linkedPage.getPageId()) {
-            Optional<PageToPage> existingLink = pageToPageRepository.findByPageIdFromAndPageIdToAndContentId(page.getPageId(), linkedPage.getPageId(), contentId);
-            if (!existingLink.isPresent()) {
-                PageToPage pageToPage = new PageToPage(page.getPageId(), linkedPage.getPageId(), contentId);
-                pageToPageRepository.save(pageToPage);
-            }
-        }
-    }
-
-    private Website saveNewWebsite(String websiteUrl) {
-        Website linkedWebsite = new Website(null, websiteUrl, LocalDateTime.now());
+    private Website createNewWebsite(String websiteUrl) {
+        Website website = new Website(null, websiteUrl, LocalDateTime.now());
         WebsiteType websiteType = getWebsiteType(websiteUrl, websiteUrl);
         WebsiteContentType websiteContentType = getWebsiteContentType(websiteUrl);
-        linkedWebsite.setType(websiteType);
-        linkedWebsite.setContentType(websiteContentType);
-
-        return websiteRepository.save(linkedWebsite);
+        website.setType(websiteType);
+        website.setContentType(websiteContentType);
+        return website;
     }
 
-    private Page saveNewPage(String pageUrl, int websiteId) {
-        Page homePage = new Page(pageUrl, LocalDateTime.now(), websiteId);
-        return pageRepository.save(homePage);
+    private Page createNewPageForWebsiteHomePage(Website website) {
+        return new Page(website.getUrl(), LocalDateTime.now(), website.getWebsiteId());
     }
 
     private String stripProtocolPrefix(String link) {
@@ -247,17 +226,12 @@ public class ScraperService {
     private String convertLocalLinksAndGlobalLinks(String link, String baseUrl) {
         if (regexPatternService.getLocalPageLinkPattern().matcher(link).matches()
             || regexPatternService.getLocalLinkPattern().matcher(link).matches()
+            || !link.contains(".")
         ) {
             return baseUrl + "/" + link;
         } else {
             return link;
         }
-    }
-
-    private String stripTrailingSlash(String link) {
-        return link.endsWith("/")
-            ? link.substring(0, link.length() - 1)
-            : link;
     }
 
     private String stripAnchorString(String link) {
