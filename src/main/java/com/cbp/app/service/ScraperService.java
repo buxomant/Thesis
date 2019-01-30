@@ -11,7 +11,6 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.dao.IncorrectResultSizeDataAccessException;
 import org.springframework.stereotype.Service;
 
 import javax.net.ssl.SSLException;
@@ -30,7 +29,8 @@ public class ScraperService {
     private final WebsiteRepository websiteRepository;
     private final WebsiteContentRepository websiteContentRepository;
     private final PageRepository pageRepository;
-    private final LinksToRepository linksToRepository;
+    private final WebsiteToWebsiteRepository websiteToWebsiteRepository;
+    private final PageToPageRepository pageToPageRepository;
     private final SubdomainOfRepository subdomainOfRepository;
     private final RegexPatternService regexPatternService;
 
@@ -39,14 +39,16 @@ public class ScraperService {
         WebsiteRepository websiteRepository,
         WebsiteContentRepository websiteContentRepository,
         PageRepository pageRepository,
-        LinksToRepository linksToRepository,
+        WebsiteToWebsiteRepository websiteToWebsiteRepository,
+        PageToPageRepository pageToPageRepository,
         SubdomainOfRepository subdomainOfRepository,
         RegexPatternService regexPatternService
     ) {
         this.websiteRepository = websiteRepository;
         this.websiteContentRepository = websiteContentRepository;
         this.pageRepository = pageRepository;
-        this.linksToRepository = linksToRepository;
+        this.websiteToWebsiteRepository = websiteToWebsiteRepository;
+        this.pageToPageRepository = pageToPageRepository;
         this.subdomainOfRepository = subdomainOfRepository;
         this.regexPatternService = regexPatternService;
     }
@@ -81,6 +83,13 @@ public class ScraperService {
             }
         }
 
+        String cleanContent = webPage.toString().replaceAll("\u0000", "");
+        if (cleanContent != null && !cleanContent.equals("")) {
+            WebsiteContent websiteContent = new WebsiteContent(currentWebsite.getWebsiteId(), cleanContent);
+            websiteContent.setTimeFetched(LocalDateTime.now());
+            websiteContentRepository.save(websiteContent);
+        }
+
         WebsiteType websiteType = getWebsiteType(url, webPage.baseUri());
         WebsiteContentType websiteContentType = getWebsiteContentType(webPage.baseUri());
         currentWebsite.setType(websiteType);
@@ -88,13 +97,6 @@ public class ScraperService {
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
         currentWebsite.setLastResponseCode(connection.response().statusCode());
         websiteRepository.save(currentWebsite);
-
-        String cleanContent = webPage.toString().replaceAll("\u0000", "");
-        if (cleanContent != null && !cleanContent.equals("")) {
-            WebsiteContent websiteContent = new WebsiteContent(currentWebsite.getWebsiteId(), cleanContent);
-            websiteContent.setTimeFetched(LocalDateTime.now());
-            websiteContentRepository.save(websiteContent);
-        }
 
         LoggingHelper.logMessage("Fetched website: " + currentWebsite.getUrl());
         LoggingHelper.logEndOfMethod("fetchWebsiteContent", startTime);
@@ -123,14 +125,14 @@ public class ScraperService {
             .map(String::trim)
             .map(this::stripProtocolPrefix)
             .map(this::stripWwwPrefix)
-            .map(link -> fixLocalLinksAndGlobalLinks(link, url))
-            .filter(this::isValidWebUrl)
-            .map(this::stripTrailingSlash)
-            .map(this::stripUselessPrefix)
+            .map(this::trimNonAlphanumericContent)
+            .map(this::stripAnchorString)
             .map(this::stripQueryString)
+            .map(link -> convertLocalLinksAndGlobalLinks(link, url))
+            .filter(this::isValidWebUrl)
             .filter(this::isNotEmptyOrUseless);
 
-        links.forEach(link -> handleLinks(link, url, currentWebsite));
+        links.forEach(link -> processLink(link, url, websiteContent));
 
         currentWebsite.setLastProcessedOn(LocalDateTime.now());
         websiteRepository.save(currentWebsite);
@@ -141,40 +143,67 @@ public class ScraperService {
         LoggingHelper.logEndOfMethod("processWebsite", startTime);
     }
 
-    private void handleLinks(String link, String currentUrl, Website currentWebsite) {
+    private void processLink(
+        String link,
+        String currentUrl,
+        WebsiteContent websiteContent
+    ) {
         if (!link.equals(currentUrl)) {
-            if (link.contains(currentUrl)) {
-                handleNewPages(link, currentWebsite);
-            } else {
-                handleNewWebsites(link, currentWebsite);
+            saveWebsiteIfNotSeenBefore(link, websiteContent);
+            savePageIfNotSeenBefore(currentUrl, link, websiteContent);
+        }
+    }
+
+    private void savePageIfNotSeenBefore(String pageUrl, String link, WebsiteContent websiteContent) {
+        List<Page> pagesMatchingUrl = pageRepository.findAllByUrlOrderByPageId(pageUrl);
+        Page currentPage = pagesMatchingUrl.size() > 0
+            ? fixDuplicatePage(pagesMatchingUrl)
+            : saveNewPage(pageUrl, websiteContent.getWebsiteId());
+
+        List<Page> linkedPagesMatchingUrl = pageRepository.findAllByUrlOrderByPageId(link);
+        Page linkedPage = linkedPagesMatchingUrl.size() > 0
+            ? fixDuplicatePage(linkedPagesMatchingUrl)
+            : saveNewPage(link, websiteContent.getWebsiteId());
+
+        createPageToPageLink(currentPage, linkedPage, websiteContent.getContentId());
+    }
+
+    private void saveWebsiteIfNotSeenBefore(String link, WebsiteContent websiteContent) {
+        String websiteUrl = stripSubPage(link).toLowerCase();
+
+        List<Website> websitesMatchingUrl = websiteRepository.findAllByUrlOrderByWebsiteId(websiteUrl);
+        Website linkedWebsite = websitesMatchingUrl.size() > 0
+            ? fixDuplicateWebsite(websitesMatchingUrl)
+            : saveNewWebsite(websiteUrl);
+
+        createWebsiteToWebsiteLink(websiteContent, linkedWebsite);
+    }
+
+    private void createWebsiteToWebsiteLink(WebsiteContent websiteContent, Website linkedWebsite) {
+        if (websiteContent.getWebsiteId() != linkedWebsite.getWebsiteId()) {
+            Optional<WebsiteToWebsite> existingLink = websiteToWebsiteRepository.findByWebsiteIdFromAndWebsiteIdToAndContentId(
+                websiteContent.getWebsiteId(),
+                linkedWebsite.getWebsiteId(),
+                websiteContent.getContentId()
+            );
+            if (!existingLink.isPresent()) {
+                WebsiteToWebsite websiteToWebsite = new WebsiteToWebsite(
+                    websiteContent.getWebsiteId(),
+                    linkedWebsite.getWebsiteId(),
+                    websiteContent.getContentId()
+                );
+                websiteToWebsiteRepository.save(websiteToWebsite);
             }
         }
     }
 
-    private void handleNewPages(String link, Website website) {
-        Optional<Page> existingPage = pageRepository.findByUrl(link);
-        if (!existingPage.isPresent()) {
-            Page linkedPage = new Page(link, LocalDateTime.now(), website.getWebsiteId());
-            pageRepository.save(linkedPage);
-        }
-    }
-
-    private void handleNewWebsites(String link, Website website) {
-        String websiteUrl = stripSubPage(link).toLowerCase();
-        try {
-            Optional<Website> existingWebsite = websiteRepository.findByUrl(websiteUrl);
-            Website linkedWebsite = existingWebsite.orElseGet(() -> saveNewWebsite(websiteUrl));
-            handleLinksToAndFrom(website, linkedWebsite);
-        } catch (IncorrectResultSizeDataAccessException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void handleLinksToAndFrom(Website websiteFrom, Website websiteTo) {
-        if (websiteFrom.getWebsiteId() != websiteTo.getWebsiteId()) {
-            Optional<LinksTo> existingLink = linksToRepository.findByWebsiteIdFromAndWebsiteIdTo(websiteFrom.getWebsiteId(), websiteTo.getWebsiteId());
-            LinksTo linksTo = existingLink.orElseGet(() -> new LinksTo(websiteFrom.getWebsiteId(), websiteTo.getWebsiteId()));
-            linksToRepository.save(linksTo);
+    private void createPageToPageLink(Page page, Page linkedPage, int contentId) {
+        if (page.getPageId() != linkedPage.getPageId()) {
+            Optional<PageToPage> existingLink = pageToPageRepository.findByPageIdFromAndPageIdToAndContentId(page.getPageId(), linkedPage.getPageId(), contentId);
+            if (!existingLink.isPresent()) {
+                PageToPage pageToPage = new PageToPage(page.getPageId(), linkedPage.getPageId(), contentId);
+                pageToPageRepository.save(pageToPage);
+            }
         }
     }
 
@@ -186,9 +215,11 @@ public class ScraperService {
         linkedWebsite.setContentType(websiteContentType);
 
         return websiteRepository.save(linkedWebsite);
-//        WebsiteContent websiteContent = new WebsiteContent(savedWebsite.getWebsiteId(), null);
-//        websiteContentRepository.save(websiteContent);
-//        return savedWebsite;
+    }
+
+    private Page saveNewPage(String pageUrl, int websiteId) {
+        Page homePage = new Page(pageUrl, LocalDateTime.now(), websiteId);
+        return pageRepository.save(homePage);
     }
 
     private String stripProtocolPrefix(String link) {
@@ -213,13 +244,13 @@ public class ScraperService {
         }
     }
 
-    private String fixLocalLinksAndGlobalLinks(String link, String baseUrl) {
-        if (regexPatternService.getGlobalLinkPattern().matcher(link).matches()) {
-            return link.substring(2);
+    private String convertLocalLinksAndGlobalLinks(String link, String baseUrl) {
+        if (regexPatternService.getLocalPageLinkPattern().matcher(link).matches()
+            || regexPatternService.getLocalLinkPattern().matcher(link).matches()
+        ) {
+            return baseUrl + "/" + link;
         } else {
-            return regexPatternService.getLocalLinkPattern().matcher(link).matches()
-                ? baseUrl + link
-                : link;
+            return link;
         }
     }
 
@@ -229,10 +260,13 @@ public class ScraperService {
             : link;
     }
 
-    private String stripUselessPrefix(String link) {
-        return link.startsWith("#")
-            ? link.substring(1, link.length())
-            : link;
+    private String stripAnchorString(String link) {
+        Matcher matcher = regexPatternService.getAnchorStringPattern().matcher(link);
+        if (matcher.matches()) {
+            return matcher.group(1);
+        } else {
+            return link;
+        }
     }
 
     private String stripQueryString(String link) {
@@ -253,12 +287,18 @@ public class ScraperService {
         }
     }
 
+    private String trimNonAlphanumericContent(String link) {
+        Matcher matcher = regexPatternService.getAlphanumericContentPattern().matcher(link);
+        return matcher.replaceAll("");
+    }
+
     private boolean isNotEmptyOrUseless(String link) {
         return !link.equals("") && !link.equals("/") && !link.equals("#");
     }
 
     private boolean isValidWebUrl(String link) {
-        return link.contains("@")
+        return !link.contains("@")
+            && !link.startsWith("#")
             && !regexPatternService.getNonWebProtocolPattern().matcher(link).matches()
             && !regexPatternService.getNonWebResourcePattern().matcher(link).matches();
     }
@@ -292,33 +332,58 @@ public class ScraperService {
             || regexPatternService.getDomesticNewsWebsitePattern().matcher(url).matches();
     }
 
-    public void fixDuplicateWebsite(String websiteUrl) {
-        LocalTime startTime = LoggingHelper.logStartOfMethod("fixDuplicateWebsite");
+    public Website fixDuplicateWebsite(List<Website> websitesMatchingUrl) {
+        Website earliestWebsite = websitesMatchingUrl.get(0);
 
-        List<Website> duplicateWebsites = websiteRepository.findAllByUrlOrderByWebsiteId(websiteUrl);
-        Website earliestWebsite = duplicateWebsites.get(0);
-        duplicateWebsites.forEach(website -> {
-            if (website.getWebsiteId() != earliestWebsite.getWebsiteId()) {
-                pageRepository.deleteAllByWebsiteId(website.getWebsiteId());
-                linksToRepository.deleteAllByWebsiteIdFrom(website.getWebsiteId());
-                linksToRepository.findAllByWebsiteIdTo(website.getWebsiteId()).forEach(linksTo -> {
-                    linksTo.setWebsiteIdTo(earliestWebsite.getWebsiteId());
-                    linksToRepository.save(linksTo);
-                });
-                subdomainOfRepository.findAllByWebsiteIdParent(website.getWebsiteId()).forEach(subdomainOf -> {
-                    subdomainOf.setWebsiteIdParent(earliestWebsite.getWebsiteId());
-                    subdomainOfRepository.save(subdomainOf);
-                });
-                subdomainOfRepository.findAllByWebsiteIdChild(website.getWebsiteId()).forEach(subdomainOf -> {
-                    subdomainOf.setWebsiteIdChild(earliestWebsite.getWebsiteId());
-                    subdomainOfRepository.save(subdomainOf);
+        if (websitesMatchingUrl.size() > 1) {
+            websitesMatchingUrl.forEach(website -> {
+                if (website.getWebsiteId() != earliestWebsite.getWebsiteId()) {
+                    LocalTime startTime = LoggingHelper.logStartOfMethod("fixDuplicateWebsite");
+
+                    pageRepository.deleteAllByWebsiteId(website.getWebsiteId());
+                    websiteToWebsiteRepository.deleteAllByWebsiteIdFrom(website.getWebsiteId());
+                    websiteToWebsiteRepository.findAllByWebsiteIdTo(website.getWebsiteId()).forEach(websiteToWebsite -> {
+                        websiteToWebsite.setWebsiteIdTo(earliestWebsite.getWebsiteId());
+                        websiteToWebsiteRepository.save(websiteToWebsite);
+                    });
+                    subdomainOfRepository.findAllByWebsiteIdParent(website.getWebsiteId()).forEach(subdomainOf -> {
+                        subdomainOf.setWebsiteIdParent(earliestWebsite.getWebsiteId());
+                        subdomainOfRepository.save(subdomainOf);
+                    });
+                    subdomainOfRepository.findAllByWebsiteIdChild(website.getWebsiteId()).forEach(subdomainOf -> {
+                        subdomainOf.setWebsiteIdChild(earliestWebsite.getWebsiteId());
+                        subdomainOfRepository.save(subdomainOf);
+                    });
+
+                    websiteRepository.delete(website);
+
+                    LoggingHelper.logEndOfMethod("fixDuplicateWebsite", startTime);
+                }
+            });
+        }
+
+        return earliestWebsite;
+    }
+
+    private Page fixDuplicatePage(List<Page> pagesMatchingUrl) {
+        Page earliestPage = pagesMatchingUrl.get(0);
+        pagesMatchingUrl.forEach(page -> {
+            if (page.getPageId() != earliestPage.getPageId()) {
+                LocalTime startTime = LoggingHelper.logStartOfMethod("fixDuplicatePage");
+
+                pageToPageRepository.deleteAllByPageIdFrom(page.getPageId());
+                pageToPageRepository.findAllByPageIdTo(page.getPageId()).forEach(pageToPage -> {
+                    pageToPage.setPageIdTo(earliestPage.getWebsiteId());
+                    pageToPageRepository.save(pageToPage);
                 });
 
-                websiteRepository.delete(website);
+                pageRepository.delete(page);
+
+                LoggingHelper.logEndOfMethod("fixDuplicatePage", startTime);
             }
         });
 
-        LoggingHelper.logEndOfMethod("fixDuplicateWebsite", startTime);
+        return earliestPage;
     }
 
     public void establishSubdomainRelationshipsForWebsite(Website website) {

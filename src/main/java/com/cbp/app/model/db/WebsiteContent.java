@@ -6,9 +6,17 @@ import java.time.LocalDateTime;
 
 @Entity
 public class WebsiteContent {
+    private static final String ID_SEQUENCE = "website_content_content_id_seq";
+
     @Id
+    @SequenceGenerator(name = ID_SEQUENCE, sequenceName = ID_SEQUENCE, allocationSize = 1)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = ID_SEQUENCE)
     @Column
-    private int websiteId;
+    private Integer contentId;
+
+    @Column
+    @NotNull
+    private Integer websiteId;
 
     @Column
     private String content;
@@ -21,17 +29,25 @@ public class WebsiteContent {
 
     public WebsiteContent() { }
 
-    public WebsiteContent(int websiteId, String content) {
+    public WebsiteContent(Integer websiteId, String content) {
         this.websiteId = websiteId;
         this.content = content;
         this.timeFetched = LocalDateTime.now();
     }
 
-    public int getWebsiteId() {
+    public Integer getContentId() {
+        return contentId;
+    }
+
+    public void setContentId(Integer contentId) {
+        this.contentId = contentId;
+    }
+
+    public Integer getWebsiteId() {
         return websiteId;
     }
 
-    public void setWebsiteId(int websiteId) {
+    public void setWebsiteId(Integer websiteId) {
         this.websiteId = websiteId;
     }
 

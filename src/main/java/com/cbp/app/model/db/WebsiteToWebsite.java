@@ -4,7 +4,7 @@ import javax.persistence.*;
 import javax.validation.constraints.NotNull;
 
 @Entity
-public class LinksTo {
+public class WebsiteToWebsite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column
@@ -18,11 +18,16 @@ public class LinksTo {
     @NotNull
     private int websiteIdTo;
 
-    public LinksTo() { }
+    @Column
+    @NotNull
+    private int contentId;
 
-    public LinksTo(@NotNull int websiteIdFrom, @NotNull int websiteIdTo) {
+    public WebsiteToWebsite() { }
+
+    public WebsiteToWebsite(@NotNull int websiteIdFrom, @NotNull int websiteIdTo, @NotNull int contentId) {
         this.websiteIdFrom = websiteIdFrom;
         this.websiteIdTo = websiteIdTo;
+        this.contentId = contentId;
     }
 
     public int getLinkId() {
@@ -47,5 +52,13 @@ public class LinksTo {
 
     public void setWebsiteIdTo(int websiteIdTo) {
         this.websiteIdTo = websiteIdTo;
+    }
+
+    public int getContentId() {
+        return contentId;
+    }
+
+    public void setContentId(int contentId) {
+        this.contentId = contentId;
     }
 }

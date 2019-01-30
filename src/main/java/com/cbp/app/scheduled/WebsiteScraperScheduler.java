@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -41,7 +42,7 @@ public class WebsiteScraperScheduler {
         this.establishSubdomainRelationshipsJobEnabled = establishSubdomainRelationshipsJobEnabled;
     }
 
-    @Scheduled(fixedRate = 100)
+    @Scheduled(fixedRate = 100000) // qq change back
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fetchWebsitesContent() throws IOException {
         if (fetchWebsitesJobEnabled) {
@@ -64,7 +65,10 @@ public class WebsiteScraperScheduler {
     public void fixDuplicateWebsites() {
         if (fixDuplicateWebsitesJobEnabled) {
             Optional<String> nextDuplicateWebsiteUrl = websiteRepository.getNextDuplicateWebsiteUrl();
-            nextDuplicateWebsiteUrl.ifPresent(scraperService::fixDuplicateWebsite);
+            if (nextDuplicateWebsiteUrl.isPresent()) {
+                List<Website> websitesMatchingUrl = websiteRepository.findAllByUrlOrderByWebsiteId(nextDuplicateWebsiteUrl.get());
+                scraperService.fixDuplicateWebsite(websitesMatchingUrl);
+            }
         }
     }
 

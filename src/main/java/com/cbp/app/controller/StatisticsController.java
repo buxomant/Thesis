@@ -2,7 +2,7 @@ package com.cbp.app.controller;
 
 import com.cbp.app.model.response.CrawlerStatisticsResponse;
 import com.cbp.app.model.response.WebsiteStatisticsResponse;
-import com.cbp.app.repository.LinksToRepository;
+import com.cbp.app.repository.WebsiteToWebsiteRepository;
 import com.cbp.app.repository.PageRepository;
 import com.cbp.app.repository.WebsiteRepository;
 import org.springframework.web.bind.annotation.*;
@@ -12,16 +12,16 @@ import org.springframework.web.bind.annotation.*;
 public class StatisticsController {
     private final WebsiteRepository websiteRepository;
     private final PageRepository pageRepository;
-    private final LinksToRepository linksToRepository;
+    private final WebsiteToWebsiteRepository websiteToWebsiteRepository;
 
     public StatisticsController(
         WebsiteRepository websiteRepository,
         PageRepository pageRepository,
-        LinksToRepository linksToRepository
+        WebsiteToWebsiteRepository websiteToWebsiteRepository
     ) {
         this.websiteRepository = websiteRepository;
         this.pageRepository = pageRepository;
-        this.linksToRepository = linksToRepository;
+        this.websiteToWebsiteRepository = websiteToWebsiteRepository;
     }
 
     @RequestMapping(value = "/crawler-statistics", method = RequestMethod.GET)
@@ -32,7 +32,7 @@ public class StatisticsController {
         Integer numberOfWebsitesWithErrors = websiteRepository.getNumberOfWebsitesWithErrors();
         Integer numberOfDuplicateWebsites = websiteRepository.getNumberOfDuplicateWebsites();
         Integer numberOfPages = pageRepository.getNumberOfPages();
-        Integer numberOfLinks = linksToRepository.getNumberOfLinks();
+        Integer numberOfLinks = websiteToWebsiteRepository.getNumberOfWebsiteToWebsiteLinks();
 
         return new CrawlerStatisticsResponse(
             numberOfWebsites,
