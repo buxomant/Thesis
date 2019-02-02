@@ -1,6 +1,5 @@
 package com.cbp.app.scheduled;
 
-import com.cbp.app.helper.LoggingHelper;
 import com.cbp.app.model.db.Website;
 import com.cbp.app.repository.WebsiteRepository;
 import com.cbp.app.service.ScraperService;

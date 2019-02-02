@@ -124,7 +124,47 @@ public class RegexPatternService {
             "|(?:.*\\.)?kudika\\.ro.*" +
             "|(?:.*\\.)?ziaruldeiasi\\.ro.*" +
             "|(?:.*\\.)?gandul\\.ro.*" +
-            "|(?:.*\\.)?gandul\\.info.*"
+            "|(?:.*\\.)?gandul\\.info.*" +
+            "|(?:.*\\.)?dcnews\\.ro.*" +
+            "|(?:.*\\.)?bzi\\.ro.*" +
+            "|(?:.*\\.)?ziaristii\\.com.*" +
+            "|(?:.*\\.)?stiridecluj\\.ro.*" +
+            "|(?:.*\\.)?cugetliber\\.ro.*" +
+            "|(?:.*\\.)?ziuact\\.ro.*" +
+            "|(?:.*\\.)?ebihoreanul\\.ro.*" +
+            "|(?:.*\\.)?ziarulevenimentul\\.ro.*" +
+            "|(?:.*\\.)?ziarulunirea\\.ro.*" +
+            "|(?:.*\\.)?stiridiaspora\\.ro.*" +
+            "|(?:.*\\.)?telegrafonline\\.ro.*" +
+            "|(?:.*\\.)?bugetul\\.ro.*" +
+            "|(?:.*\\.)?monitorulcj\\.ro.*" +
+            "|(?:.*\\.)?replicaonline\\.ro.*" +
+            "|(?:.*\\.)?aradon\\.ro.*" +
+            "|(?:.*\\.)?bihon\\.ro.*" +
+            "|(?:.*\\.)?tion\\.ro.*" +
+            "|(?:.*\\.)?viata-libera\\.ro.*" +
+            "|(?:.*\\.)?ziardesuceava\\.ro.*" +
+            "|(?:.*\\.)?alba24\\.ro.*" +
+            "|(?:.*\\.)?notabn\\.ro.*" +
+            "|(?:.*\\.)?activenews\\.ro.*" +
+            "|(?:.*\\.)?turnulsfatului\\.ro.*" +
+            "|(?:.*\\.)?pandurul\\.ro.*" +
+            "|(?:.*\\.)?obiectivbr\\.ro.*" +
+            "|(?:.*\\.)?botosaneanul\\.ro.*" +
+            "|(?:.*\\.)?vremeanoua\\.ro.*" +
+            "|(?:.*\\.)?ziuadevest\\.ro.*" +
+            "|(?:.*\\.)?monitoruldevrancea\\.ro.*" +
+            "|(?:.*\\.)?financiarul\\.ro.*" +
+            "|(?:.*\\.)?zi-de-zi\\.ro.*" +
+            "|(?:.*\\.)?gorjeanul\\.ro.*" +
+            "|(?:.*\\.)?emaramures\\.ro.*" +
+            "|(?:.*\\.)?ziarulargesul\\.ro.*" +
+            "|(?:.*\\.)?bzc\\.ro.*" +
+            "|(?:.*\\.)?newsteam\\.ro.*" +
+            "|(?:.*\\.)?vdtonline\\.ro.*" +
+            "|(?:.*\\.)?ziar\\.com.*" +
+            "|(?:.*\\.)?aktual24\\.ro.*" +
+            "|(?:.*\\.)?tribuna\\.ro.*"
         );
         this.socialMediaWebsitePattern = Pattern.compile(
             "(?:.*\\.)?facebook\\.com.*" +

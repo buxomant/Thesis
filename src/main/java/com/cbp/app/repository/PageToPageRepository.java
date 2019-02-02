@@ -14,6 +14,8 @@ public interface PageToPageRepository extends JpaRepository<PageToPage, Integer>
 
     void deleteAllByPageIdFrom(int pageIdFrom);
 
+    void deleteAllByPageIdTo(int pageIdTo);
+
     List<PageToPage> findAllByPageIdTo(int pageIdTo);
 
     @Query(value = "SELECT COUNT(*) FROM page_to_page", nativeQuery = true)

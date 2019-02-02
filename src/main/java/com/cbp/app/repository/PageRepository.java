@@ -16,6 +16,8 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
 
     List<Page> findAllByUrlOrderByPageId(String url);
 
+    List<Page> findAllByWebsiteId(Integer websiteId);
+
     void deleteAllByWebsiteId(Integer websiteId);
 
     @Query(value = "SELECT COUNT(*) FROM page", nativeQuery = true)

@@ -180,9 +180,13 @@ public class ScraperService {
         Page currentPage = pagesMatchingUrl.size() > 0
             ? fixDuplicatePage(pagesMatchingUrl)
             : createNewPageForWebsiteHomePage(websiteRepository.getOne(websiteContent.getWebsiteId()));
+        Page savedCurrentPage = (currentPage.getPageId() == 0)
+            ? pageRepository.save(currentPage)
+            : currentPage;
 
         List<PageToPage> pageToPages = existingPages.stream()
-            .map(page -> new PageToPage(currentPage.getPageId(), page.getPageId(), websiteContent.getContentId()))
+            .filter(page -> !(pagesMatchingUrl.contains(page) && page.getPageId() != currentPage.getPageId()))
+            .map(page -> new PageToPage(savedCurrentPage.getPageId(), page.getPageId(), websiteContent.getContentId()))
             .collect(Collectors.toList());
 
         pageToPageRepository.saveAll(pageToPages);
@@ -314,6 +318,12 @@ public class ScraperService {
                 if (website.getWebsiteId() != earliestWebsite.getWebsiteId()) {
                     LocalTime startTime = LoggingHelper.logStartOfMethod("fixDuplicateWebsite");
 
+                    List<Page> pages = pageRepository.findAllByWebsiteId(website.getWebsiteId());
+                    pages.forEach(page -> {
+                        pageToPageRepository.deleteAllByPageIdFrom(page.getPageId());
+                        pageToPageRepository.deleteAllByPageIdTo(page.getPageId());
+                    });
+
                     pageRepository.deleteAllByWebsiteId(website.getWebsiteId());
                     websiteToWebsiteRepository.deleteAllByWebsiteIdFrom(website.getWebsiteId());
                     websiteToWebsiteRepository.findAllByWebsiteIdTo(website.getWebsiteId()).forEach(websiteToWebsite -> {
@@ -347,7 +357,7 @@ public class ScraperService {
 
                 pageToPageRepository.deleteAllByPageIdFrom(page.getPageId());
                 pageToPageRepository.findAllByPageIdTo(page.getPageId()).forEach(pageToPage -> {
-                    pageToPage.setPageIdTo(earliestPage.getWebsiteId());
+                    pageToPage.setPageIdTo(earliestPage.getPageId());
                     pageToPageRepository.save(pageToPage);
                 });
 
