@@ -31,7 +31,6 @@ public class ScraperService {
     private final WebsiteToWebsiteRepository websiteToWebsiteRepository;
     private final PageToPageRepository pageToPageRepository;
     private final SubdomainOfRepository subdomainOfRepository;
-    private final RegexPatternService regexPatternService;
 
     @Autowired
     public ScraperService(
@@ -40,8 +39,7 @@ public class ScraperService {
         PageRepository pageRepository,
         WebsiteToWebsiteRepository websiteToWebsiteRepository,
         PageToPageRepository pageToPageRepository,
-        SubdomainOfRepository subdomainOfRepository,
-        RegexPatternService regexPatternService
+        SubdomainOfRepository subdomainOfRepository
     ) {
         this.websiteRepository = websiteRepository;
         this.websiteContentRepository = websiteContentRepository;
@@ -49,7 +47,6 @@ public class ScraperService {
         this.websiteToWebsiteRepository = websiteToWebsiteRepository;
         this.pageToPageRepository = pageToPageRepository;
         this.subdomainOfRepository = subdomainOfRepository;
-        this.regexPatternService = regexPatternService;
     }
 
     public void fetchWebsiteContent(Website currentWebsite) {
@@ -59,7 +56,7 @@ public class ScraperService {
         Document webPage = null;
         String urlIncludingWwwAndProtocol;
         String url = currentWebsite.getUrl();
-        String urlIncludingWww = regexPatternService.getUrlMissingWwwPattern().matcher(url).matches() ? "www." + url : url;
+        String urlIncludingWww = RegexPatternService.urlMissingWwwPattern.matcher(url).matches() ? "www." + url : url;
         urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
 
         try {
@@ -230,9 +227,9 @@ public class ScraperService {
     }
 
     private String convertLocalLinksAndGlobalLinks(String link, String baseUrl) {
-        if (regexPatternService.getLocalPageLinkPattern().matcher(link).matches()
-            || regexPatternService.getLocalLinkPattern().matcher(link).matches()
-            || regexPatternService.getDateStringPattern().matcher(link).matches()
+        if (RegexPatternService.localPageLinkPattern.matcher(link).matches()
+            || RegexPatternService.localLinkPattern.matcher(link).matches()
+            || RegexPatternService.dateStringPattern.matcher(link).matches()
             || !link.contains(".")
             || (link.contains(".-") && !link.contains(".ro"))
         ) {
@@ -243,22 +240,22 @@ public class ScraperService {
     }
 
     private String stripAnchorString(String link) {
-        Matcher matcher = regexPatternService.getAnchorStringPattern().matcher(link);
+        Matcher matcher = RegexPatternService.anchorStringPattern.matcher(link);
         return matcher.matches() ? matcher.group(1) : link;
     }
 
     private String stripQueryString(String link) {
-        Matcher matcher = regexPatternService.getQueryStringPattern().matcher(link);
+        Matcher matcher = RegexPatternService.queryStringPattern.matcher(link);
         return matcher.matches() ? matcher.group(1) : link;
     }
 
     private String stripAsteriskString(String link) {
-        Matcher matcher = regexPatternService.getAsteriskStringPattern().matcher(link);
+        Matcher matcher = RegexPatternService.asteriskStringPattern.matcher(link);
         return matcher.matches() ? matcher.group(1) : link;
     }
 
     private String stripSubPage(String link) {
-        Matcher matcher = regexPatternService.getSubPagePattern().matcher(link);
+        Matcher matcher = RegexPatternService.subPagePattern.matcher(link);
         return matcher.matches() ? matcher.group(1) : link;
     }
 
@@ -267,7 +264,7 @@ public class ScraperService {
             .replace("\n", "")
             .replace("\r", "")
             .replace(" ", ""); // qq rewrite more concisely
-        Matcher matcher = regexPatternService.getAlphanumericContentPattern().matcher(linkWithoutNewlinesOrSpaces);
+        Matcher matcher = RegexPatternService.alphanumericContentPattern.matcher(linkWithoutNewlinesOrSpaces);
         return matcher.replaceAll("");
     }
 
@@ -280,19 +277,19 @@ public class ScraperService {
     }
 
     private boolean isNotIPOrPhoneNumber(String link) {
-        Matcher matcher = regexPatternService.getIpOrPhoneStringPattern().matcher(link);
+        Matcher matcher = RegexPatternService.ipOrPhoneStringPattern.matcher(link);
         return !matcher.matches();
     }
 
     private boolean isValidWebUrl(String link) {
         return !link.contains("@")
             && !link.startsWith("#")
-            && !regexPatternService.getNonWebProtocolPattern().matcher(link).matches()
-            && !regexPatternService.getNonWebResourcePattern().matcher(link).matches();
+            && !RegexPatternService.nonWebProtocolPattern.matcher(link).matches()
+            && !RegexPatternService.nonWebResourcePattern.matcher(link).matches();
     }
 
     private WebsiteType getWebsiteType(String storedUrl, String actualUrl) {
-        if (regexPatternService.getIndexingServicePattern().matcher(actualUrl).matches()) {
+        if (RegexPatternService.indexingServicePattern.matcher(actualUrl).matches()) {
             return WebsiteType.INDEXING_SERVICE;
         }
         if (isDomesticWebsite(storedUrl) && !isDomesticWebsite(actualUrl)) {
@@ -306,18 +303,18 @@ public class ScraperService {
     }
 
     private WebsiteContentType getWebsiteContentType(String url) {
-        if (regexPatternService.getSocialMediaWebsitePattern().matcher(url).matches()) {
+        if (RegexPatternService.socialMediaWebsitePattern.matcher(url).matches()) {
             return WebsiteContentType.SOCIAL_MEDIA;
         }
-        if (regexPatternService.getDomesticNewsWebsitePattern().matcher(url).matches()) {
+        if (RegexPatternService.domesticNewsWebsitePattern.matcher(url).matches()) {
             return WebsiteContentType.NEWS;
         }
         return WebsiteContentType.UNCATEGORIZED;
     }
 
     private boolean isDomesticWebsite(String url) {
-        return regexPatternService.getDomesticWebsitePattern().matcher(url).matches()
-            || regexPatternService.getDomesticNewsWebsitePattern().matcher(url).matches();
+        return RegexPatternService.domesticWebsitePattern.matcher(url).matches()
+            || RegexPatternService.domesticNewsWebsitePattern.matcher(url).matches();
     }
 
     public Website fixDuplicateWebsite(List<Website> websitesMatchingUrl) {
