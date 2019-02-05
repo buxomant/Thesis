@@ -20,7 +20,6 @@ import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
@@ -123,14 +122,17 @@ public class ScraperService {
             .map(link -> link.attr("href"))
             .map(String::trim)
             .map(String::toLowerCase)
+            .map(this::trimNonAlphanumericContent)
             .map(this::stripProtocolPrefix)
             .map(this::stripWwwPrefix)
-            .map(this::trimNonAlphanumericContent)
             .map(this::stripAnchorString)
             .map(this::stripQueryString)
-            .map(link -> convertLocalLinksAndGlobalLinks(link, url))
+            .map(this::stripAsteriskString)
+            .filter(this::isNotIPOrPhoneNumber)
             .filter(this::isValidWebUrl)
             .filter(this::isNotEmptyOrUseless)
+            .filter(this::isNotJavascriptFunction)
+            .map(link -> convertLocalLinksAndGlobalLinks(link, url))
             .distinct()
             .collect(Collectors.toList());
 
@@ -221,7 +223,7 @@ public class ScraperService {
 
     private String stripWwwPrefix(String link) {
         if (link.startsWith("www.")) {
-            return link.substring(4);
+            return link.replaceAll("www.", "");
         } else {
             return link;
         }
@@ -230,7 +232,9 @@ public class ScraperService {
     private String convertLocalLinksAndGlobalLinks(String link, String baseUrl) {
         if (regexPatternService.getLocalPageLinkPattern().matcher(link).matches()
             || regexPatternService.getLocalLinkPattern().matcher(link).matches()
+            || regexPatternService.getDateStringPattern().matcher(link).matches()
             || !link.contains(".")
+            || (link.contains(".-") && !link.contains(".ro"))
         ) {
             return baseUrl + "/" + link;
         } else {
@@ -240,38 +244,44 @@ public class ScraperService {
 
     private String stripAnchorString(String link) {
         Matcher matcher = regexPatternService.getAnchorStringPattern().matcher(link);
-        if (matcher.matches()) {
-            return matcher.group(1);
-        } else {
-            return link;
-        }
+        return matcher.matches() ? matcher.group(1) : link;
     }
 
     private String stripQueryString(String link) {
         Matcher matcher = regexPatternService.getQueryStringPattern().matcher(link);
-        if (matcher.matches()) {
-            return matcher.group(1);
-        } else {
-            return link;
-        }
+        return matcher.matches() ? matcher.group(1) : link;
+    }
+
+    private String stripAsteriskString(String link) {
+        Matcher matcher = regexPatternService.getAsteriskStringPattern().matcher(link);
+        return matcher.matches() ? matcher.group(1) : link;
     }
 
     private String stripSubPage(String link) {
         Matcher matcher = regexPatternService.getSubPagePattern().matcher(link);
-        if (matcher.matches()) {
-            return matcher.group(1);
-        } else {
-            return link;
-        }
+        return matcher.matches() ? matcher.group(1) : link;
     }
 
     private String trimNonAlphanumericContent(String link) {
-        Matcher matcher = regexPatternService.getAlphanumericContentPattern().matcher(link);
+        String linkWithoutNewlinesOrSpaces = link
+            .replace("\n", "")
+            .replace("\r", "")
+            .replace(" ", ""); // qq rewrite more concisely
+        Matcher matcher = regexPatternService.getAlphanumericContentPattern().matcher(linkWithoutNewlinesOrSpaces);
         return matcher.replaceAll("");
     }
 
     private boolean isNotEmptyOrUseless(String link) {
         return !link.equals("") && !link.equals("/") && !link.equals("#");
+    }
+
+    private boolean isNotJavascriptFunction(String link) {
+        return !link.contains("()");
+    }
+
+    private boolean isNotIPOrPhoneNumber(String link) {
+        Matcher matcher = regexPatternService.getIpOrPhoneStringPattern().matcher(link);
+        return !matcher.matches();
     }
 
     private boolean isValidWebUrl(String link) {
@@ -286,7 +296,7 @@ public class ScraperService {
             return WebsiteType.INDEXING_SERVICE;
         }
         if (isDomesticWebsite(storedUrl) && !isDomesticWebsite(actualUrl)) {
-            return WebsiteType.REDIRECT_TO_FOREIGN;
+            return WebsiteType.REDIRECT;
         }
         if (isDomesticWebsite(actualUrl)) {
             return WebsiteType.DOMESTIC;

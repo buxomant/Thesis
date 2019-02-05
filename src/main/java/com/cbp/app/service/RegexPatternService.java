@@ -10,8 +10,11 @@ public class RegexPatternService {
     private final Pattern localLinkPattern;
     private final Pattern localPageLinkPattern;
     private final Pattern queryStringPattern;
+    private final Pattern asteriskStringPattern;
+    private final Pattern dateStringPattern;
+    private final Pattern ipOrPhoneStringPattern;
     private final Pattern anchorStringPattern;
-    private final Pattern alphanumericContentStartPattern;
+    private final Pattern alphanumericContentPattern;
     private final Pattern subPagePattern;
     private final Pattern nonWebResourcePattern;
     private final Pattern nonWebProtocolPattern;
@@ -23,20 +26,24 @@ public class RegexPatternService {
     public RegexPatternService() {
         this.urlMissingWwwPattern = Pattern.compile("^\\w+\\.\\w+");
         this.globalLinkPattern = Pattern.compile("^\\/{2}.+");
-        this.localLinkPattern = Pattern.compile("^[^\\.]*\\/.+");
+        this.localLinkPattern = Pattern.compile("^[^\\.]*\\/.+"); // maybe [a-z] instead of .
         this.localPageLinkPattern = Pattern.compile("[^\\.]*\\.(?:" +
             "htm" +
             "|html" +
             "|xhtml" +
             "|phtml" +
+            "|shtml" +
             "|php" +
             "|asp" +
             "|aspx" +
             "|jsp" +
             ")$");
         this.queryStringPattern = Pattern.compile("(.*)\\?.*");
+        this.asteriskStringPattern = Pattern.compile("(.*)\\*.*");
+        this.dateStringPattern = Pattern.compile("^[^\\.]*[0-9]+\\.[0-9]+\\.[0-9]+[^\\.]*$");
+        this.ipOrPhoneStringPattern = Pattern.compile("^[0-9\\.]+$");
         this.anchorStringPattern = Pattern.compile("(.*)#.*");
-        this.alphanumericContentStartPattern = Pattern.compile("^([\\W_]*)|([\\W_]*$)");
+        this.alphanumericContentPattern = Pattern.compile("^([\\W_]*)|([\\W_]*$)");
         this.subPagePattern = Pattern.compile("(.*?\\.\\w+)/.*");
         this.nonWebResourcePattern = Pattern.compile(".*\\.(?:" +
             "bmp" +
@@ -62,6 +69,7 @@ public class RegexPatternService {
             "|ods" +
             "|avi" +
             "|mp3" +
+            "|mp4" +
             "|rss" +
             "|atom" +
             "|txt" +
@@ -217,12 +225,24 @@ public class RegexPatternService {
         return queryStringPattern;
     }
 
+    public Pattern getAsteriskStringPattern() {
+        return asteriskStringPattern;
+    }
+
+    public Pattern getDateStringPattern() {
+        return dateStringPattern;
+    }
+
+    public Pattern getIpOrPhoneStringPattern() {
+        return ipOrPhoneStringPattern;
+    }
+
     public Pattern getAnchorStringPattern() {
         return anchorStringPattern;
     }
 
     public Pattern getAlphanumericContentPattern() {
-        return alphanumericContentStartPattern;
+        return alphanumericContentPattern;
     }
 
     public Pattern getSubPagePattern() {

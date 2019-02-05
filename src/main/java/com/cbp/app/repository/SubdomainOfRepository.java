@@ -11,4 +11,6 @@ public interface SubdomainOfRepository extends JpaRepository<SubdomainOf, Intege
     List<SubdomainOf> findAllByWebsiteIdParent(int websiteIdParent);
 
     List<SubdomainOf> findAllByWebsiteIdChild(int websiteIdChild);
+
+    List<SubdomainOf> findAllByWebsiteIdChildIn(List<Integer> websiteIds);
 }

@@ -11,6 +11,25 @@ import java.util.Optional;
 
 @Repository
 public interface WebsiteRepository extends JpaRepository<Website, Integer> {
+    
+    @Query(value = "SELECT DISTINCT w.* " +
+        "  FROM website_to_website wtw " +
+        "  JOIN website w ON wtw.website_id_to = w.website_id " +
+        "WHERE website_id_from IN (SELECT website_id FROM website WHERE type = :websiteType AND content_type = :websiteContentType) " +
+        "  AND content_id IN (SELECT MAX(content_id) FROM website_to_website GROUP BY website_id_from) " +
+        "  AND website_id NOT IN (SELECT website_id_child FROM subdomain_of) " +
+        "UNION " +
+        "SELECT DISTINCT w.* " +
+        "  FROM website_to_website wtw " +
+        "  JOIN website w ON wtw.website_id_from = w.website_id " +
+        "WHERE website_id_from IN (SELECT website_id FROM website WHERE type = :websiteType AND content_type = :websiteContentType) " +
+        "  AND content_id IN (SELECT MAX(content_id) FROM website_to_website GROUP BY website_id_from) " +
+        "  AND website_id NOT IN (SELECT website_id_child FROM subdomain_of)", nativeQuery = true)
+    List<Website> findWebsitesByWebsiteTypeAnAndContentType(
+        @Param("websiteType") String websiteType,
+        @Param("websiteContentType") String websiteContentType
+    );
+    
     Optional<Website> findByUrl(String url);
 
     List<Website> findAllByUrlOrderByWebsiteId(String url);
@@ -74,7 +93,7 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
     @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'FOREIGN'", nativeQuery = true)
     Integer getNumberOfForeignWebsites();
 
-    @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'REDIRECT_TO_FOREIGN'", nativeQuery = true)
+    @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'REDIRECT'", nativeQuery = true)
     Integer getNumberOfRedirectToForeignWebsites();
 
     @Query(value = "SELECT COUNT(*) FROM website WHERE type = 'INDEXING_SERVICE'", nativeQuery = true)
