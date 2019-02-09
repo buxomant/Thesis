@@ -22,12 +22,16 @@ public class PageToPage {
     @NotNull
     private int contentId;
 
+    @Column
+    private String title;
+
     public PageToPage() { }
 
-    public PageToPage(@NotNull int pageIdFrom, @NotNull int pageIdTo, @NotNull int contentId) {
+    public PageToPage(@NotNull int pageIdFrom, @NotNull int pageIdTo, @NotNull int contentId, String title) {
         this.pageIdFrom = pageIdFrom;
         this.pageIdTo = pageIdTo;
         this.contentId = contentId;
+        this.title = title;
     }
 
     public int getLinkId() {
@@ -60,5 +64,13 @@ public class PageToPage {
 
     public void setContentId(int contentId) {
         this.contentId = contentId;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 }

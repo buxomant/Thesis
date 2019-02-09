@@ -1,6 +1,7 @@
 package com.cbp.app.service;
 
 import com.cbp.app.helper.LoggingHelper;
+import com.cbp.app.model.SimpleLink;
 import com.cbp.app.model.db.*;
 import com.cbp.app.model.enumType.WebsiteContentType;
 import com.cbp.app.model.enumType.WebsiteType;
@@ -20,7 +21,12 @@ import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.regex.Matcher;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 @Service
@@ -86,8 +92,8 @@ public class ScraperService {
             websiteContentRepository.save(websiteContent);
         }
 
-        WebsiteType websiteType = getWebsiteType(url, webPage.baseUri());
-        WebsiteContentType websiteContentType = getWebsiteContentType(webPage.baseUri());
+        WebsiteType websiteType = WebsiteService.getWebsiteType(url, webPage.baseUri());
+        WebsiteContentType websiteContentType = WebsiteService.getWebsiteContentType(webPage.baseUri());
         currentWebsite.setType(websiteType);
         currentWebsite.setContentType(websiteContentType);
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
@@ -115,24 +121,7 @@ public class ScraperService {
         Document webPage = Jsoup.parse(websiteContent.getContent());
         Elements linkElements = webPage.select("a");
 
-        List<String> links = linkElements.stream()
-            .map(link -> link.attr("href"))
-            .map(String::trim)
-            .map(String::toLowerCase)
-            .map(this::trimNonAlphanumericContent)
-            .map(this::stripProtocolPrefix)
-            .map(this::stripWwwPrefix)
-            .map(this::stripAnchorString)
-            .map(this::stripQueryString)
-            .map(this::stripAsteriskString)
-            .filter(this::isNotIPOrPhoneNumber)
-            .filter(this::isValidWebUrl)
-            .filter(this::isNotEmptyOrUseless)
-            .filter(this::isNotJavascriptFunction)
-            .map(link -> convertLocalLinksAndGlobalLinks(link, url))
-            .distinct()
-            .collect(Collectors.toList());
-
+        List<SimpleLink> links = LinkService.domLinksToSimpleLinks(linkElements, url);
         processLinks(links, currentWebsite, websiteContent);
 
         currentWebsite.setLastProcessedOn(LocalDateTime.now());
@@ -145,176 +134,110 @@ public class ScraperService {
         LoggingHelper.logEndOfMethod("processWebsite", startTime);
     }
 
-    private void processLinks(List<String> links, Website currentWebsite, WebsiteContent websiteContent) {
-        List<Website> allWebsites = links.stream()
-            .map(this::stripSubPage)
-            .distinct()
-            .map(this::createNewWebsite)
-            .collect(Collectors.toList());
-        List<String> websiteUrls = allWebsites.stream().map(Website::getUrl).collect(Collectors.toList());
+    private void processLinks(List<SimpleLink> links, Website currentWebsite, WebsiteContent websiteContent) {
+        Map<SimpleLink, Website> websitesByLinkTitle = linksToWebsitesByLinkTitle(links);
+
+        List<String> websiteUrls = websitesByLinkTitle.values().stream().map(Website::getUrl).collect(Collectors.toList());
         List<Website> existingWebsites = websiteRepository.findAllByUrlIn(websiteUrls);
         List<String> existingWebsiteUrls = existingWebsites.stream().map(Website::getUrl).collect(Collectors.toList());
-        List<Website> newWebsites = allWebsites.stream().filter(website -> !existingWebsiteUrls.contains(website.getUrl())).collect(Collectors.toList());
-
+        List<Website> newWebsites = websitesByLinkTitle.values().stream()
+            .filter(website -> !existingWebsiteUrls.contains(website.getUrl())).collect(Collectors.toList());
         List<Website> savedNewWebsites = websiteRepository.saveAll(newWebsites);
-        existingWebsites.addAll(savedNewWebsites);
 
-        List<WebsiteToWebsite> websiteToWebsites = existingWebsites.stream()
-            .map(website -> new WebsiteToWebsite(websiteContent.getWebsiteId(), website.getWebsiteId(), websiteContent.getContentId()))
-            .collect(Collectors.toList());
+        websitesByLinkTitle.replaceAll((link, website) -> {
+            Optional<Website> existingWebsite = existingWebsites.stream().filter(w -> w.getUrl().equals(website.getUrl())).findFirst();
+            if (existingWebsite.isPresent()) {
+                return existingWebsite.get();
+            }
+            Optional<Website> newWebsite = savedNewWebsites.stream().filter(w -> w.getUrl().equals(website.getUrl())).findFirst();
+            return newWebsite.orElse(website);
+        });
+
+        List<WebsiteToWebsite> websiteToWebsites = createWebsiteToWebsiteLinks(websitesByLinkTitle, websiteContent);
         websiteToWebsiteRepository.saveAll(websiteToWebsites);
 
-        List<Page> pages = allWebsites.stream()
-            .map(this::createNewPageForWebsiteHomePage)
-            .collect(Collectors.toList());
-        List<String> pageUrls = pages.stream().map(Page::getUrl).collect(Collectors.toList());
-        List<Page> existingPages = pageRepository.findAllByUrlIn(pageUrls);
-        List<String> existingPagesUrls = existingPages.stream().map(Page::getUrl).collect(Collectors.toList());
-        List<Page> newPages = pages.stream().filter(page -> !existingPagesUrls.contains(page.getUrl())).collect(Collectors.toList());
+        Map<SimpleLink, Page> pagesByLinkTitle = websitesByLinkTitleToPagesByLinkTitle(websitesByLinkTitle);
 
+        List<String> pageUrls = pagesByLinkTitle.values().stream().map(Page::getUrl).collect(Collectors.toList());
+        List<Page> existingPages = pageRepository.findAllByUrlIn(pageUrls);
+        List<String> existingPageUrls = existingPages.stream().map(Page::getUrl).collect(Collectors.toList());
+        List<Page> newPages = pagesByLinkTitle.values().stream()
+            .filter(page -> !existingPageUrls.contains(page.getUrl())).collect(Collectors.toList());
         List<Page> savedNewPages = pageRepository.saveAll(newPages);
-        existingPages.addAll(savedNewPages);
+
+        pagesByLinkTitle.replaceAll((link, page) -> {
+            Optional<Page> existingPage = existingPages.stream().filter(p -> p.getUrl().equals(page.getUrl())).findFirst();
+            if (existingPage.isPresent()) {
+                return existingPage.get();
+            }
+            Optional<Page> newPage = savedNewPages.stream().filter(p -> p.getUrl().equals(page.getUrl())).findFirst();
+            return newPage.orElse(page);
+        });
 
         List<Page> pagesMatchingUrl = pageRepository.findAllByUrlOrderByPageId(currentWebsite.getUrl());
         Page currentPage = pagesMatchingUrl.size() > 0
             ? fixDuplicatePage(pagesMatchingUrl)
-            : createNewPageForWebsiteHomePage(websiteRepository.getOne(websiteContent.getWebsiteId()));
+            : WebsiteService.createNewPageForWebsiteHomePage(websiteRepository.getOne(websiteContent.getWebsiteId()));
         Page savedCurrentPage = (currentPage.getPageId() == 0)
             ? pageRepository.save(currentPage)
             : currentPage;
 
-        List<PageToPage> pageToPages = existingPages.stream()
-            .filter(page -> !(pagesMatchingUrl.contains(page) && page.getPageId() != currentPage.getPageId()))
-            .map(page -> new PageToPage(savedCurrentPage.getPageId(), page.getPageId(), websiteContent.getContentId()))
-            .collect(Collectors.toList());
-
+        List<PageToPage> pageToPages = createPageToPageLinks(pagesByLinkTitle, savedCurrentPage, pagesMatchingUrl, websiteContent);
         pageToPageRepository.saveAll(pageToPages);
     }
 
-    private Website createNewWebsite(String websiteUrl) {
-        Website website = new Website(null, websiteUrl, LocalDateTime.now());
-        WebsiteType websiteType = getWebsiteType(websiteUrl, websiteUrl);
-        WebsiteContentType websiteContentType = getWebsiteContentType(websiteUrl);
-        website.setType(websiteType);
-        website.setContentType(websiteContentType);
-        return website;
+    private Map<SimpleLink, Website> linksToWebsitesByLinkTitle(List<SimpleLink> links) {
+        return links.stream()
+            .map(LinkService::stripSubPage)
+            .filter(distinctByKey(SimpleLink::getLinkUrl))
+            .collect(Collectors.toMap(
+                Function.identity(),
+                link -> WebsiteService.createNewWebsite(link.getLinkUrl())
+            ));
     }
 
-    private Page createNewPageForWebsiteHomePage(Website website) {
-        return new Page(website.getUrl(), LocalDateTime.now(), website.getWebsiteId());
+    private Map<SimpleLink, Page> websitesByLinkTitleToPagesByLinkTitle(Map<SimpleLink, Website> websitesByLinkTitle) {
+        return websitesByLinkTitle.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> WebsiteService.createNewPageForWebsiteHomePage(entry.getValue())
+            ));
     }
 
-    private String stripProtocolPrefix(String link) {
-        return link
-            .replace("https//", "")
-            .replace("https://", "")
-            .replace("https:/", "")
-            .replace("https:\\\\", "")
-            .replace("https:\\", "")
-            .replace("http//", "")
-            .replace("http://", "")
-            .replace("http:/", "")
-            .replace("http:\\\\", "")
-            .replace("http:\\", "");
+    private List<WebsiteToWebsite> createWebsiteToWebsiteLinks(
+        Map<SimpleLink, Website> websitesByLinkTitle,
+        WebsiteContent websiteContent
+    ) {
+        return websitesByLinkTitle.entrySet().stream()
+            .map(entry -> new WebsiteToWebsite(
+                websiteContent.getWebsiteId(),
+                entry.getValue().getWebsiteId(),
+                websiteContent.getContentId(),
+                entry.getKey().getLinkTitle()
+            ))
+            .collect(Collectors.toList());
     }
 
-    private String stripWwwPrefix(String link) {
-        if (link.startsWith("www.")) {
-            return link.replaceAll("www.", "");
-        } else {
-            return link;
-        }
+    private List<PageToPage> createPageToPageLinks(
+        Map<SimpleLink, Page> pagesByLinkTitle,
+        Page savedCurrentPage,
+        List<Page> pagesMatchingUrl,
+        WebsiteContent websiteContent
+    ) {
+        return pagesByLinkTitle.entrySet().stream()
+            .filter(entry -> !(pagesMatchingUrl.contains(entry.getValue()) && entry.getValue().getPageId() != savedCurrentPage.getPageId()))
+            .map(entry -> new PageToPage(
+                savedCurrentPage.getPageId(),
+                entry.getValue().getPageId(),
+                websiteContent.getContentId(),
+                entry.getKey().getLinkTitle()
+            ))
+            .collect(Collectors.toList());
     }
 
-    private String convertLocalLinksAndGlobalLinks(String link, String baseUrl) {
-        if (RegexPatternService.localPageLinkPattern.matcher(link).matches()
-            || RegexPatternService.localLinkPattern.matcher(link).matches()
-            || RegexPatternService.dateStringPattern.matcher(link).matches()
-            || !link.contains(".")
-            || (link.contains(".-") && !link.contains(".ro"))
-        ) {
-            return baseUrl + "/" + link;
-        } else {
-            return link;
-        }
-    }
-
-    private String stripAnchorString(String link) {
-        Matcher matcher = RegexPatternService.anchorStringPattern.matcher(link);
-        return matcher.matches() ? matcher.group(1) : link;
-    }
-
-    private String stripQueryString(String link) {
-        Matcher matcher = RegexPatternService.queryStringPattern.matcher(link);
-        return matcher.matches() ? matcher.group(1) : link;
-    }
-
-    private String stripAsteriskString(String link) {
-        Matcher matcher = RegexPatternService.asteriskStringPattern.matcher(link);
-        return matcher.matches() ? matcher.group(1) : link;
-    }
-
-    private String stripSubPage(String link) {
-        Matcher matcher = RegexPatternService.subPagePattern.matcher(link);
-        return matcher.matches() ? matcher.group(1) : link;
-    }
-
-    private String trimNonAlphanumericContent(String link) {
-        String linkWithoutNewlinesOrSpaces = link
-            .replace("\n", "")
-            .replace("\r", "")
-            .replace(" ", ""); // qq rewrite more concisely
-        Matcher matcher = RegexPatternService.alphanumericContentPattern.matcher(linkWithoutNewlinesOrSpaces);
-        return matcher.replaceAll("");
-    }
-
-    private boolean isNotEmptyOrUseless(String link) {
-        return !link.equals("") && !link.equals("/") && !link.equals("#");
-    }
-
-    private boolean isNotJavascriptFunction(String link) {
-        return !link.contains("()");
-    }
-
-    private boolean isNotIPOrPhoneNumber(String link) {
-        Matcher matcher = RegexPatternService.ipOrPhoneStringPattern.matcher(link);
-        return !matcher.matches();
-    }
-
-    private boolean isValidWebUrl(String link) {
-        return !link.contains("@")
-            && !link.startsWith("#")
-            && !RegexPatternService.nonWebProtocolPattern.matcher(link).matches()
-            && !RegexPatternService.nonWebResourcePattern.matcher(link).matches();
-    }
-
-    private WebsiteType getWebsiteType(String storedUrl, String actualUrl) {
-        if (RegexPatternService.indexingServicePattern.matcher(actualUrl).matches()) {
-            return WebsiteType.INDEXING_SERVICE;
-        }
-        if (isDomesticWebsite(storedUrl) && !isDomesticWebsite(actualUrl)) {
-            return WebsiteType.REDIRECT;
-        }
-        if (isDomesticWebsite(actualUrl)) {
-            return WebsiteType.DOMESTIC;
-        } else {
-            return WebsiteType.FOREIGN;
-        }
-    }
-
-    private WebsiteContentType getWebsiteContentType(String url) {
-        if (RegexPatternService.socialMediaWebsitePattern.matcher(url).matches()) {
-            return WebsiteContentType.SOCIAL_MEDIA;
-        }
-        if (RegexPatternService.domesticNewsWebsitePattern.matcher(url).matches()) {
-            return WebsiteContentType.NEWS;
-        }
-        return WebsiteContentType.UNCATEGORIZED;
-    }
-
-    private boolean isDomesticWebsite(String url) {
-        return RegexPatternService.domesticWebsitePattern.matcher(url).matches()
-            || RegexPatternService.domesticNewsWebsitePattern.matcher(url).matches();
+    private static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
+        Set<Object> seen = ConcurrentHashMap.newKeySet();
+        return t -> seen.add(keyExtractor.apply(t));
     }
 
     public Website fixDuplicateWebsite(List<Website> websitesMatchingUrl) {

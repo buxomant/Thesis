@@ -22,12 +22,16 @@ public class WebsiteToWebsite {
     @NotNull
     private int contentId;
 
+    @Column
+    private String title;
+
     public WebsiteToWebsite() { }
 
-    public WebsiteToWebsite(@NotNull int websiteIdFrom, @NotNull int websiteIdTo, @NotNull int contentId) {
+    public WebsiteToWebsite(@NotNull int websiteIdFrom, @NotNull int websiteIdTo, @NotNull int contentId, String title) {
         this.websiteIdFrom = websiteIdFrom;
         this.websiteIdTo = websiteIdTo;
         this.contentId = contentId;
+        this.title = title;
     }
 
     public int getLinkId() {
@@ -60,5 +64,13 @@ public class WebsiteToWebsite {
 
     public void setContentId(int contentId) {
         this.contentId = contentId;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 }
