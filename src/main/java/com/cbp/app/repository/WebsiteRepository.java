@@ -17,14 +17,13 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
         "  JOIN website w ON wtw.website_id_to = w.website_id " +
         "WHERE website_id_from IN (SELECT website_id FROM website WHERE type = :websiteType AND content_type = :websiteContentType) " +
         "  AND content_id IN (SELECT MAX(content_id) FROM website_to_website GROUP BY website_id_from) " +
-        "  AND website_id NOT IN (SELECT website_id_child FROM subdomain_of) " +
         "UNION " +
         "SELECT DISTINCT w.* " +
         "  FROM website_to_website wtw " +
         "  JOIN website w ON wtw.website_id_from = w.website_id " +
         "WHERE website_id_from IN (SELECT website_id FROM website WHERE type = :websiteType AND content_type = :websiteContentType) " +
-        "  AND content_id IN (SELECT MAX(content_id) FROM website_to_website GROUP BY website_id_from) " +
-        "  AND website_id NOT IN (SELECT website_id_child FROM subdomain_of)", nativeQuery = true)
+        "  AND content_id IN (SELECT MAX(content_id) FROM website_to_website GROUP BY website_id_from) ",
+        nativeQuery = true)
     List<Website> findWebsitesByWebsiteTypeAnAndContentType(
         @Param("websiteType") String websiteType,
         @Param("websiteContentType") String websiteContentType
@@ -54,16 +53,18 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
         " ORDER BY COUNT(url) DESC LIMIT 1", nativeQuery = true)
     Optional<String> getNextDuplicateWebsiteUrl();
 
-    @Query(value = "SELECT * FROM website w " +
-        "WHERE error IS NULL " +
+    @Query(value = "SELECT * FROM website w  " +
+        "WHERE error IS NULL  " +
         "  AND url NOT LIKE '%.%.%' " +
-        "  AND EXISTS(" +
-        "    SELECT * FROM website" +
-        "    WHERE url LIKE CONCAT('%.', w.url, '%')" +
-        "  ) AND NOT EXISTS(" +
-        "    SELECT * FROM subdomain_of" +
-        "    WHERE website_id_parent = w.website_id OR website_id_child = w.website_id" +
-        "  ) LIMIT 1", nativeQuery = true)
+        "  AND EXISTS( " +
+        "    SELECT website_id FROM website " +
+        "    WHERE website_id IN (SELECT website_id FROM website WHERE url LIKE '%.%.%') " +
+        "      AND website_id NOT IN (SELECT DISTINCT website_id_child FROM subdomain_of) " +
+        "      AND url LIKE CONCAT('%.', w.url, '%') " +
+        "  )  " +
+        "  AND website_id NOT IN (SELECT DISTINCT website_id_parent FROM subdomain_of) " +
+        "  AND website_id NOT IN (SELECT DISTINCT website_id_child FROM subdomain_of) " +
+        "  LIMIT 1", nativeQuery = true)
     Optional<Website> getNextWebsiteNotMarkedAsDomainOrSubdomain();
 
     @Query(value = "SELECT * FROM website " +

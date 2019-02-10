@@ -8,61 +8,61 @@ public class WebsiteToWebsite {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column
-    private int linkId;
+    private Integer linkId;
 
     @Column
     @NotNull
-    private int websiteIdFrom;
+    private Integer websiteIdFrom;
 
     @Column
     @NotNull
-    private int websiteIdTo;
+    private Integer websiteIdTo;
 
     @Column
     @NotNull
-    private int contentId;
+    private Integer contentId;
 
     @Column
     private String title;
 
     public WebsiteToWebsite() { }
 
-    public WebsiteToWebsite(@NotNull int websiteIdFrom, @NotNull int websiteIdTo, @NotNull int contentId, String title) {
+    public WebsiteToWebsite(@NotNull Integer websiteIdFrom, @NotNull Integer websiteIdTo, @NotNull Integer contentId, String title) {
         this.websiteIdFrom = websiteIdFrom;
         this.websiteIdTo = websiteIdTo;
         this.contentId = contentId;
         this.title = title;
     }
 
-    public int getLinkId() {
+    public Integer getLinkId() {
         return linkId;
     }
 
-    public void setLinkId(int linkId) {
+    public void setLinkId(Integer linkId) {
         this.linkId = linkId;
     }
 
-    public int getWebsiteIdFrom() {
+    public Integer getWebsiteIdFrom() {
         return websiteIdFrom;
     }
 
-    public void setWebsiteIdFrom(int websiteIdFrom) {
+    public void setWebsiteIdFrom(Integer websiteIdFrom) {
         this.websiteIdFrom = websiteIdFrom;
     }
 
-    public int getWebsiteIdTo() {
+    public Integer getWebsiteIdTo() {
         return websiteIdTo;
     }
 
-    public void setWebsiteIdTo(int websiteIdTo) {
+    public void setWebsiteIdTo(Integer websiteIdTo) {
         this.websiteIdTo = websiteIdTo;
     }
 
-    public int getContentId() {
+    public Integer getContentId() {
         return contentId;
     }
 
-    public void setContentId(int contentId) {
+    public void setContentId(Integer contentId) {
         this.contentId = contentId;
     }
 

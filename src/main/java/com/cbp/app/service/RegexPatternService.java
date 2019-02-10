@@ -6,7 +6,6 @@ import java.util.regex.Pattern;
 @Service
 public class RegexPatternService {
     public static final Pattern urlMissingWwwPattern = Pattern.compile("^\\w+\\.\\w+");
-    public static final Pattern globalLinkPattern = Pattern.compile("^\\/{2}.+");
     public static final Pattern localLinkPattern = Pattern.compile("^[^\\.]*\\/.+"); // maybe [a-z] instead of .
     public static final Pattern localPageLinkPattern = Pattern.compile("[^\\.]*\\.(?:" +
         "htm" +
@@ -18,6 +17,7 @@ public class RegexPatternService {
         "|asp" +
         "|aspx" +
         "|jsp" +
+        "|cfm" +
         ")$");
     public static final Pattern queryStringPattern = Pattern.compile("(.*)\\?.*");
     public static final Pattern asteriskStringPattern = Pattern.compile("(.*)\\*.*");

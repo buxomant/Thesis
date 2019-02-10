@@ -71,7 +71,7 @@ public class WebsiteScraperScheduler {
         }
     }
 
-    @Scheduled(fixedRate = 10000)
+    @Scheduled(fixedRate = 1000)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void establishSubdomainRelationships() {
         if (establishSubdomainRelationshipsJobEnabled) {

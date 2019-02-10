@@ -23,11 +23,10 @@ import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import static com.cbp.app.service.HelperService.distinctByKey;
 
 @Service
 public class ScraperService {
@@ -93,9 +92,13 @@ public class ScraperService {
         }
 
         WebsiteType websiteType = WebsiteService.getWebsiteType(url, webPage.baseUri());
-        WebsiteContentType websiteContentType = WebsiteService.getWebsiteContentType(webPage.baseUri());
+
+        if (currentWebsite.getContentType() == WebsiteContentType.UNCATEGORIZED) {
+            WebsiteContentType websiteContentType = WebsiteService.getWebsiteContentType(webPage.baseUri());
+            currentWebsite.setContentType(websiteContentType);
+        }
+
         currentWebsite.setType(websiteType);
-        currentWebsite.setContentType(websiteContentType);
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
         currentWebsite.setLastResponseCode(connection.response().statusCode());
         websiteRepository.save(currentWebsite);
@@ -233,11 +236,6 @@ public class ScraperService {
                 entry.getKey().getLinkTitle()
             ))
             .collect(Collectors.toList());
-    }
-
-    private static <T> Predicate<T> distinctByKey(Function<? super T, ?> keyExtractor) {
-        Set<Object> seen = ConcurrentHashMap.newKeySet();
-        return t -> seen.add(keyExtractor.apply(t));
     }
 
     public Website fixDuplicateWebsite(List<Website> websitesMatchingUrl) {

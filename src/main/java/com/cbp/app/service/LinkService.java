@@ -32,7 +32,7 @@ public class LinkService {
         }
     }
 
-    public static SimpleLink convertLocalLinksAndGlobalLinks(SimpleLink link, String baseUrl) {
+    public static SimpleLink convertLocalLinks(SimpleLink link, String baseUrl) {
         String linkUrl = link.getLinkUrl();
         if (RegexPatternService.localPageLinkPattern.matcher(linkUrl).matches()
             || RegexPatternService.localLinkPattern.matcher(linkUrl).matches()
@@ -104,7 +104,7 @@ public class LinkService {
             .filter(link -> LinkService.isValidWebUrl(link.getLinkUrl()))
             .filter(link -> LinkService.isNotEmptyOrUseless(link.getLinkUrl()))
             .filter(link -> LinkService.isNotJavascriptFunction(link.getLinkUrl()))
-            .map(link -> LinkService.convertLocalLinksAndGlobalLinks(link, currentWebsiteUrl))
+            .map(link -> LinkService.convertLocalLinks(link, currentWebsiteUrl))
             .distinct()
             .collect(Collectors.toList());
     }
