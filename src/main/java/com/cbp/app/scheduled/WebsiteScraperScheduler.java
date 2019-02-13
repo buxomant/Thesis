@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
+import java.io.*;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,6 +23,7 @@ public class WebsiteScraperScheduler {
     private final boolean processWebsitesJobEnabled;
     private final boolean fixDuplicateWebsitesJobEnabled;
     private final boolean establishSubdomainRelationshipsJobEnabled;
+
 
     @Autowired
     public WebsiteScraperScheduler(
@@ -78,11 +79,5 @@ public class WebsiteScraperScheduler {
             Optional<Website> nextWebsite = websiteRepository.getNextWebsiteNotMarkedAsDomainOrSubdomain();
             nextWebsite.ifPresent(scraperService::establishSubdomainRelationshipsForWebsite);
         }
-    }
-
-    @Scheduled(fixedRate = 60 * 60 * 1000)
-    @Transactional(isolation = Isolation.REPEATABLE_READ)
-    public void indexWebsites() {
-        
     }
 }

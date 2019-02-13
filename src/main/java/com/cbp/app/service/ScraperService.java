@@ -10,7 +10,6 @@ import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,6 +28,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static com.cbp.app.service.HelperService.distinctByKey;
+import static com.cbp.app.service.IndexService.DATE_AND_HOUR_PATTERN;
+import static com.cbp.app.service.IndexService.WEBSITE_STORAGE_PATH;
 
 @Service
 public class ScraperService {
@@ -38,9 +39,6 @@ public class ScraperService {
     private final WebsiteToWebsiteRepository websiteToWebsiteRepository;
     private final PageToPageRepository pageToPageRepository;
     private final SubdomainOfRepository subdomainOfRepository;
-
-    private final String WEBSITE_STORAGE_PATH = "./website-storage";
-    private final String DATE_AND_HOUR_PATTERN = "yyyy-MM-dd_HH";
 
     @Autowired
     public ScraperService(
