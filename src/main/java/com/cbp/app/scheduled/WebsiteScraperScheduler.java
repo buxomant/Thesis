@@ -79,4 +79,10 @@ public class WebsiteScraperScheduler {
             nextWebsite.ifPresent(scraperService::establishSubdomainRelationshipsForWebsite);
         }
     }
+
+    @Scheduled(fixedRate = 60 * 60 * 1000)
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public void indexWebsites() {
+        
+    }
 }

@@ -10,16 +10,18 @@ import org.jsoup.Connection;
 import org.jsoup.HttpStatusException;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.net.ssl.SSLException;
-import java.io.IOException;
+import java.io.*;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,6 +38,9 @@ public class ScraperService {
     private final WebsiteToWebsiteRepository websiteToWebsiteRepository;
     private final PageToPageRepository pageToPageRepository;
     private final SubdomainOfRepository subdomainOfRepository;
+
+    private final String WEBSITE_STORAGE_PATH = "./website-storage";
+    private final String DATE_AND_HOUR_PATTERN = "yyyy-MM-dd_HH";
 
     @Autowired
     public ScraperService(
@@ -84,6 +89,12 @@ public class ScraperService {
             }
         }
 
+        try {
+            saveWebsiteTextToFile(webPage, url);
+        } catch (IOException e) {
+            // whatever
+        }
+
         String cleanContent = webPage.toString().replaceAll("\u0000", "");
         if (cleanContent != null && !cleanContent.equals("")) {
             WebsiteContent websiteContent = new WebsiteContent(currentWebsite.getWebsiteId(), cleanContent);
@@ -107,6 +118,22 @@ public class ScraperService {
         LoggingHelper.logEndOfMethod("fetchWebsiteContent", startTime);
     }
 
+    private void saveWebsiteTextToFile(Document webPage, String url) throws IOException {
+        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
+        String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
+        File directory = new File(workingDirectory);
+        if (!directory.exists()) {
+            directory.mkdirs();
+        }
+        File websiteFile = new File(workingDirectory + "/" + url + ".txt");
+        if (!websiteFile.exists()) {
+            websiteFile.createNewFile();
+        }
+        try (PrintStream out = new PrintStream(new FileOutputStream(websiteFile))) {
+            out.print(webPage.text());
+        }
+    }
+
     private void saveWebsiteError(Website currentWebsite, Connection connection, String errorMessage) {
         currentWebsite.setError(errorMessage);
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
@@ -122,7 +149,7 @@ public class ScraperService {
         String url = currentWebsite.getUrl();
         WebsiteContent websiteContent = websiteContentRepository.getFirstByWebsiteIdAndTimeProcessedIsNull(currentWebsite.getWebsiteId());
         Document webPage = Jsoup.parse(websiteContent.getContent());
-        Elements linkElements = webPage.select("a");
+        Elements linkElements = webPage.select("[href]");
 
         List<SimpleLink> links = LinkService.domLinksToSimpleLinks(linkElements, url);
         processLinks(links, currentWebsite, websiteContent);
