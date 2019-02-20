@@ -38,14 +38,15 @@ public interface WebsiteRepository extends JpaRepository<Website, Integer> {
     @Query(value = "SELECT * FROM website" +
         " WHERE type = 'DOMESTIC'" +
         "   AND last_checked_on + INTERVAL '1' HOUR * fetch_every_number_of_hours < now()" +
-        " ORDER BY last_checked_on ASC LIMIT 1", nativeQuery = true)
-    Optional<Website> getNextDomesticWebsiteThatNeedsFetching();
+        "   AND website_id NOT IN (SELECT DISTINCT website_id_child FROM subdomain_of)" +
+        " ORDER BY last_checked_on ASC", nativeQuery = true)
+    List<Website> getNextDomesticTopDomainWebsitesThatNeedFetching();
 
     @Query(value = "SELECT * FROM website JOIN website_content USING (website_id)" +
         " WHERE time_processed IS NULL" +
         "   AND type = 'DOMESTIC'" +
-        " ORDER BY time_fetched ASC LIMIT 1", nativeQuery = true)
-    Optional<Website> getNextDomesticWebsiteThatNeedsProcessing();
+        " ORDER BY time_fetched", nativeQuery = true)
+    List<Website> getNextDomesticWebsitesThatNeedProcessing();
 
     @Query(value = "SELECT url FROM website" +
         " GROUP BY url" +

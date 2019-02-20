@@ -1,5 +1,6 @@
 package com.cbp.app.scheduled;
 
+import com.cbp.app.helper.TimeLimitedRepeater;
 import com.cbp.app.model.db.Website;
 import com.cbp.app.repository.WebsiteRepository;
 import com.cbp.app.service.ScraperService;
@@ -11,8 +12,10 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.*;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Queue;
 
 @Component
 public class WebsiteScraperScheduler {
@@ -23,7 +26,6 @@ public class WebsiteScraperScheduler {
     private final boolean processWebsitesJobEnabled;
     private final boolean fixDuplicateWebsitesJobEnabled;
     private final boolean establishSubdomainRelationshipsJobEnabled;
-
 
     @Autowired
     public WebsiteScraperScheduler(
@@ -42,21 +44,31 @@ public class WebsiteScraperScheduler {
         this.establishSubdomainRelationshipsJobEnabled = establishSubdomainRelationshipsJobEnabled;
     }
 
-    @Scheduled(fixedRate = 100)
+    @Scheduled(fixedRate = 60 * 1000)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void fetchWebsitesContent() throws IOException {
         if (fetchWebsitesJobEnabled) {
-            Optional<Website> nextUncheckedWebsite = websiteRepository.getNextDomesticWebsiteThatNeedsFetching();
-            nextUncheckedWebsite.ifPresent(scraperService::fetchWebsiteContent);
+            Queue<Website> nextUncheckedWebsites = new LinkedList<>(
+                websiteRepository.getNextDomesticTopDomainWebsitesThatNeedFetching()
+            );
+
+            TimeLimitedRepeater
+                .repeat(() -> scraperService.fetchWebsiteContent(nextUncheckedWebsites))
+                .repeatWithDefaultTimeLimit();
         }
     }
 
-    @Scheduled(fixedRate = 100)
+    @Scheduled(fixedRate = 60 * 1000)
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void processWebsites() {
         if (processWebsitesJobEnabled) {
-            Optional<Website> nextUnprocessedWebsite = websiteRepository.getNextDomesticWebsiteThatNeedsProcessing();
-            nextUnprocessedWebsite.ifPresent(scraperService::processWebsite);
+            Queue<Website> nextUnprocessedWebsites = new LinkedList<>(
+                websiteRepository.getNextDomesticWebsitesThatNeedProcessing()
+            );
+
+            TimeLimitedRepeater
+                .repeat(() -> scraperService.processWebsite(nextUnprocessedWebsites))
+                .repeatWithDefaultTimeLimit();
         }
     }
 

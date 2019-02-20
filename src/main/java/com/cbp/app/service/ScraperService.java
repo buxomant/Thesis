@@ -1,6 +1,7 @@
 package com.cbp.app.service;
 
 import com.cbp.app.helper.LoggingHelper;
+import com.cbp.app.helper.Ticker;
 import com.cbp.app.model.SimpleLink;
 import com.cbp.app.model.db.*;
 import com.cbp.app.model.enumType.WebsiteContentType;
@@ -24,9 +25,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static com.cbp.app.helper.Ticker.TickResult.BREAK;
+import static com.cbp.app.helper.Ticker.TickResult.CONTINUE;
 import static com.cbp.app.service.HelperService.distinctByKey;
 import static com.cbp.app.service.IndexService.DATE_AND_HOUR_PATTERN;
 import static com.cbp.app.service.IndexService.WEBSITE_STORAGE_PATH;
@@ -57,7 +61,12 @@ public class ScraperService {
         this.subdomainOfRepository = subdomainOfRepository;
     }
 
-    public void fetchWebsiteContent(Website currentWebsite) {
+    public Ticker.TickResult fetchWebsiteContent(Queue<Website> websites) {
+        Website currentWebsite = websites.poll();
+        if (currentWebsite == null) {
+            return BREAK;
+        }
+
         LocalTime startTime = LoggingHelper.logStartOfMethod("fetchWebsiteContent");
 
         Connection connection = null;
@@ -74,7 +83,7 @@ public class ScraperService {
             urlIncludingWwwAndProtocol = "http://" + urlIncludingWww;
         } catch (IOException e) {
             saveWebsiteError(currentWebsite, connection, e.getMessage());
-            return;
+            return CONTINUE;
         }
 
         if (webPage == null) {
@@ -83,14 +92,14 @@ public class ScraperService {
                 webPage = connection.get();
             } catch (IOException e) {
                 saveWebsiteError(currentWebsite, connection, e.getMessage());
-                return;
+                return CONTINUE;
             }
         }
 
         try {
-            saveWebsiteTextToFile(webPage, url);
+            saveWebsiteTextToFile(webPage, url, currentWebsite);
         } catch (IOException e) {
-            // whatever
+            return CONTINUE;
         }
 
         String cleanContent = webPage.toString().replaceAll("\u0000", "");
@@ -114,16 +123,19 @@ public class ScraperService {
 
         LoggingHelper.logMessage("Fetched website: " + currentWebsite.getUrl());
         LoggingHelper.logEndOfMethod("fetchWebsiteContent", startTime);
+
+        return CONTINUE;
     }
 
-    private void saveWebsiteTextToFile(Document webPage, String url) throws IOException {
+    private void saveWebsiteTextToFile(Document webPage, String url, Website currentWebsite) throws IOException {
         String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
         String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
         File directory = new File(workingDirectory);
         if (!directory.exists()) {
             directory.mkdirs();
         }
-        File websiteFile = new File(workingDirectory + "/" + url + ".txt");
+        String fileName = workingDirectory + "/" + url + "_" + currentWebsite.getWebsiteId() + ".txt";
+        File websiteFile = new File(fileName);
         if (!websiteFile.exists()) {
             websiteFile.createNewFile();
         }
@@ -141,7 +153,12 @@ public class ScraperService {
         websiteRepository.save(currentWebsite);
     }
 
-    public void processWebsite(Website currentWebsite) {
+    public Ticker.TickResult processWebsite(Queue<Website> websites) {
+        Website currentWebsite = websites.poll();
+        if (currentWebsite == null) {
+            return BREAK;
+        }
+
         LocalTime startTime = LoggingHelper.logStartOfMethod("processWebsite");
 
         String url = currentWebsite.getUrl();
@@ -160,6 +177,8 @@ public class ScraperService {
 
         LoggingHelper.logMessage("Processed website: " + currentWebsite.getUrl());
         LoggingHelper.logEndOfMethod("processWebsite", startTime);
+
+        return CONTINUE;
     }
 
     private void processLinks(List<SimpleLink> links, Website currentWebsite, WebsiteContent websiteContent) {
