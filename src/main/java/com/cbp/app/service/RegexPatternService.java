@@ -56,6 +56,9 @@ public class RegexPatternService {
         "|txt" +
         "|tif" +
         "|exe" +
+        "|css" +
+        "|json" +
+        "|ico" +
         ")$");
     public static final Pattern nonWebProtocolPattern = Pattern.compile("^(" +
         "mailto" +

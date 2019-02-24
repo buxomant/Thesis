@@ -3,8 +3,6 @@ package com.cbp.app.service;
 import org.apache.lucene.document.*;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.index.Term;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -70,14 +68,6 @@ public class IndexService {
 
             System.out.println("*** adding to index " + file);
             indexWriter.addDocument(document);
-
-//            if (indexWriter.getConfig().getOpenMode() == IndexWriterConfig.OpenMode.CREATE) {
-//                System.out.println("*** adding to index " + file);
-//                indexWriter.addDocument(document);
-//            } else {
-//                System.out.println("*** updating in index " + file);
-//                indexWriter.updateDocument(new Term("path", file.toString()), document);
-//            }
         }
     }
 

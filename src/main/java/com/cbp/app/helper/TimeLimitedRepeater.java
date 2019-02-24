@@ -3,7 +3,7 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 public class TimeLimitedRepeater {
-    private static Duration DEFAULT_TIME_LIMIT = Duration.ofSeconds(45L);
+    private static Duration DEFAULT_TIME_LIMIT = Duration.ofMinutes(45L);
 
     public TimeLimitedRepeater() { }
 
@@ -31,7 +31,6 @@ public class TimeLimitedRepeater {
                     break;
                 }
             }
-
         }
     }
 }

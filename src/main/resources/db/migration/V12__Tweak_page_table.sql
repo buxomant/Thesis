@@ -1,0 +1,2 @@
+ALTER TABLE page
+  ADD COLUMN last_seen TIMESTAMP;

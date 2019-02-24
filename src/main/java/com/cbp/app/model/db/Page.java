@@ -36,6 +36,9 @@ public class Page {
     private LocalDateTime lastProcessedOn;
 
     @Column
+    private LocalDateTime lastSeen;
+
+    @Column
     private Integer lastResponseCode;
 
     @Column
@@ -127,5 +130,13 @@ public class Page {
 
     public void setWebsiteId(int websiteId) {
         this.websiteId = websiteId;
+    }
+
+    public LocalDateTime getLastSeen() {
+        return lastSeen;
+    }
+
+    public void setLastSeen(LocalDateTime lastSeen) {
+        this.lastSeen = lastSeen;
     }
 }

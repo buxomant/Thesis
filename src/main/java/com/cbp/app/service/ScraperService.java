@@ -13,7 +13,10 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.net.ssl.SSLException;
 import java.io.*;
@@ -22,10 +25,10 @@ import java.net.SocketTimeoutException;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Queue;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -61,45 +64,16 @@ public class ScraperService {
         this.subdomainOfRepository = subdomainOfRepository;
     }
 
-    public Ticker.TickResult fetchWebsiteContent(Queue<Website> websites) {
-        Website currentWebsite = websites.poll();
-        if (currentWebsite == null) {
-            return BREAK;
-        }
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public void storeWebsiteContent(Website currentWebsite, Document webPage) {
+        LocalTime startTime = LoggingHelper.logStartOfMethod("storeWebsiteContent");
 
-        LocalTime startTime = LoggingHelper.logStartOfMethod("fetchWebsiteContent");
-
-        Connection connection = null;
-        Document webPage = null;
-        String urlIncludingWwwAndProtocol;
         String url = currentWebsite.getUrl();
-        String urlIncludingWww = RegexPatternService.urlMissingWwwPattern.matcher(url).matches() ? "www." + url : url;
-        urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
-
-        try {
-            connection = Jsoup.connect(urlIncludingWwwAndProtocol);
-            webPage = connection.get();
-        } catch (HttpStatusException | SSLException | SocketException | SocketTimeoutException e) {
-            urlIncludingWwwAndProtocol = "http://" + urlIncludingWww;
-        } catch (IOException e) {
-            saveWebsiteError(currentWebsite, connection, e.getMessage());
-            return CONTINUE;
-        }
-
-        if (webPage == null) {
-            try {
-                connection = Jsoup.connect(urlIncludingWwwAndProtocol);
-                webPage = connection.get();
-            } catch (IOException e) {
-                saveWebsiteError(currentWebsite, connection, e.getMessage());
-                return CONTINUE;
-            }
-        }
 
         try {
             saveWebsiteTextToFile(webPage, url, currentWebsite);
         } catch (IOException e) {
-            return CONTINUE;
+            return;
         }
 
         String cleanContent = webPage.toString().replaceAll("\u0000", "");
@@ -118,13 +92,50 @@ public class ScraperService {
 
         currentWebsite.setType(websiteType);
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
-        currentWebsite.setLastResponseCode(connection.response().statusCode());
+        currentWebsite.setLastResponseCode(200);
         websiteRepository.save(currentWebsite);
 
         LoggingHelper.logMessage("Fetched website: " + currentWebsite.getUrl());
-        LoggingHelper.logEndOfMethod("fetchWebsiteContent", startTime);
+        LoggingHelper.logEndOfMethod("storeWebsiteContent", startTime);
+    }
 
-        return CONTINUE;
+    public Optional<Document> getWebPageIfUrlReachable(Website currentWebsite) {
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            LoggingHelper.logMessage("*** Failed to sleep in thread");
+        }
+
+        LoggingHelper.logMessage("Thread id - " + Thread.currentThread().getName());
+
+        Connection connection = null;
+        Document webPage = null;
+        String urlIncludingWwwAndProtocol;
+        String url = currentWebsite.getUrl();
+        String urlIncludingWww = RegexPatternService.urlMissingWwwPattern.matcher(url).matches() ? "www." + url : url;
+        urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
+
+        try {
+            connection = Jsoup.connect(urlIncludingWwwAndProtocol).timeout(2 * 1000);
+            webPage = connection.get();
+        } catch (HttpStatusException | SSLException | SocketException | SocketTimeoutException e) {
+            urlIncludingWwwAndProtocol = "http://" + urlIncludingWww;
+        } catch (IOException e) {
+            saveWebsiteError(currentWebsite, connection, e.getMessage());
+            return Optional.empty();
+        }
+
+        if (webPage == null) {
+            try {
+                connection = Jsoup.connect(urlIncludingWwwAndProtocol);
+                webPage = connection.get();
+            } catch (IOException e) {
+                saveWebsiteError(currentWebsite, connection, e.getMessage());
+                return Optional.empty();
+            }
+        }
+
+        return Optional.of(webPage);
     }
 
     private void saveWebsiteTextToFile(Document webPage, String url, Website currentWebsite) throws IOException {
@@ -153,6 +164,7 @@ public class ScraperService {
         websiteRepository.save(currentWebsite);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public Ticker.TickResult processWebsite(Queue<Website> websites) {
         Website currentWebsite = websites.poll();
         if (currentWebsite == null) {
@@ -175,7 +187,7 @@ public class ScraperService {
         websiteContent.setTimeProcessed(LocalDateTime.now());
         websiteContentRepository.save(websiteContent);
 
-        LoggingHelper.logMessage("Processed website: " + currentWebsite.getUrl());
+        LoggingHelper.logMessage("Processed website: " + currentWebsite.getUrl() + " (" + websites.size() + " left)");
         LoggingHelper.logEndOfMethod("processWebsite", startTime);
 
         return CONTINUE;
@@ -203,14 +215,24 @@ public class ScraperService {
         List<WebsiteToWebsite> websiteToWebsites = createWebsiteToWebsiteLinks(websitesByLinkTitle, websiteContent);
         websiteToWebsiteRepository.saveAll(websiteToWebsites);
 
-        Map<SimpleLink, Page> pagesByLinkTitle = websitesByLinkTitleToPagesByLinkTitle(websitesByLinkTitle);
+        List<Website> allWebsites = new ArrayList<>();
+        allWebsites.addAll(existingWebsites);
+        allWebsites.addAll(savedNewWebsites);
+        Map<SimpleLink, Page> pagesByLinkTitle = linksToPagesByLinkTitle(links, allWebsites);
 
         List<String> pageUrls = pagesByLinkTitle.values().stream().map(Page::getUrl).collect(Collectors.toList());
         List<Page> existingPages = pageRepository.findAllByUrlIn(pageUrls);
         List<String> existingPageUrls = existingPages.stream().map(Page::getUrl).collect(Collectors.toList());
         List<Page> newPages = pagesByLinkTitle.values().stream()
-            .filter(page -> !existingPageUrls.contains(page.getUrl())).collect(Collectors.toList());
+            .filter(page -> !existingPageUrls.contains(page.getUrl()))
+            .map(ScraperService::updateLastSeenToNow)
+            .collect(Collectors.toList());
         List<Page> savedNewPages = pageRepository.saveAll(newPages);
+
+        List<Page> updatedExistingPages = existingPages.stream()
+            .map(ScraperService::updateLastSeenToNow)
+            .collect(Collectors.toList());
+        pageRepository.saveAll(updatedExistingPages);
 
         pagesByLinkTitle.replaceAll((link, page) -> {
             Optional<Page> existingPage = existingPages.stream().filter(p -> p.getUrl().equals(page.getUrl())).findFirst();
@@ -233,6 +255,11 @@ public class ScraperService {
         pageToPageRepository.saveAll(pageToPages);
     }
 
+    private static Page updateLastSeenToNow(Page page) {
+        page.setLastSeen(LocalDateTime.now());
+        return page;
+    }
+
     private Map<SimpleLink, Website> linksToWebsitesByLinkTitle(List<SimpleLink> links) {
         return links.stream()
             .map(LinkService::stripSubPage)
@@ -240,6 +267,19 @@ public class ScraperService {
             .collect(Collectors.toMap(
                 Function.identity(),
                 link -> WebsiteService.createNewWebsite(link.getLinkUrl())
+            ));
+    }
+
+    private Map<SimpleLink, Page> linksToPagesByLinkTitle(List<SimpleLink> links, List<Website> websites) {
+        return links.stream()
+            .filter(distinctByKey(SimpleLink::getLinkUrl))
+            .collect(Collectors.toMap(
+                Function.identity(),
+                link -> {
+                    String linkUrl = link.getLinkUrl();
+                    Website website = websites.stream().filter(w -> linkUrl.contains(w.getUrl())).findFirst().get();
+                    return new Page(linkUrl, LocalDateTime.now(), website.getWebsiteId());
+                }
             ));
     }
 
