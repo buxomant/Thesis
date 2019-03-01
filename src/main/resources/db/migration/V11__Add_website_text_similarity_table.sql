@@ -1,7 +1,9 @@
-CREATE TABLE website_text_similarity(
+CREATE TABLE text_similarity(
   similarity_id SERIAL PRIMARY KEY,
-  first_website_id INT NOT NULL,
-  second_website_id INT NOT NULL,
+  first_id INT NOT NULL,
+  second_id INT NOT NULL,
   time_frame TEXT NOT NULL,
+  first_type TEXT NOT NULL,
+  second_type TEXT NOT NULL,
   similarity_coefficient DOUBLE PRECISION
 );

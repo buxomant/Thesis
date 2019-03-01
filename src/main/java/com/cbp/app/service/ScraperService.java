@@ -66,8 +66,6 @@ public class ScraperService {
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void storeWebsiteContent(Website currentWebsite, Document webPage) {
-        LocalTime startTime = LoggingHelper.logStartOfMethod("storeWebsiteContent");
-
         String url = currentWebsite.getUrl();
 
         try {
@@ -93,21 +91,26 @@ public class ScraperService {
         currentWebsite.setType(websiteType);
         currentWebsite.setLastCheckedOn(LocalDateTime.now());
         currentWebsite.setLastResponseCode(200);
-        websiteRepository.save(currentWebsite);
+        websiteRepository.save(currentWebsite); // qq do this in batch
+    }
 
-        LoggingHelper.logMessage("Fetched website: " + currentWebsite.getUrl());
-        LoggingHelper.logEndOfMethod("storeWebsiteContent", startTime);
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
+    public void storePageContent(Page currentPage, Document webPage) {
+        String url = currentPage.getUrl();
+
+        try {
+            savePageTextToFile(webPage, url, currentPage);
+        } catch (IOException e) {
+            System.out.println("Failed to save page with URL: " + url + ". Exception: " + e.getMessage());
+            return;
+        }
+
+        currentPage.setLastCheckedOn(LocalDateTime.now());
+        currentPage.setLastResponseCode(200);
+        pageRepository.save(currentPage); // qq do this in batch
     }
 
     public Optional<Document> getWebPageIfUrlReachable(Website currentWebsite) {
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            LoggingHelper.logMessage("*** Failed to sleep in thread");
-        }
-
-        LoggingHelper.logMessage("Thread id - " + Thread.currentThread().getName());
-
         Connection connection = null;
         Document webPage = null;
         String urlIncludingWwwAndProtocol;
@@ -138,6 +141,37 @@ public class ScraperService {
         return Optional.of(webPage);
     }
 
+    public Optional<Document> getWebPageIfUrlReachable(Page currentPage) {
+        Connection connection = null;
+        Document webPage = null;
+        String urlIncludingWwwAndProtocol;
+        String url = currentPage.getUrl();
+        String urlIncludingWww = RegexPatternService.urlMissingWwwPattern.matcher(url).matches() ? "www." + url : url;
+        urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
+
+        try {
+            connection = Jsoup.connect(urlIncludingWwwAndProtocol).timeout(2 * 1000);
+            webPage = connection.get();
+        } catch (HttpStatusException | SSLException | SocketException | SocketTimeoutException e) {
+            urlIncludingWwwAndProtocol = "http://" + urlIncludingWww;
+        } catch (IOException e) {
+            savePageError(currentPage, connection, e.getMessage());
+            return Optional.empty();
+        }
+
+        if (webPage == null) {
+            try {
+                connection = Jsoup.connect(urlIncludingWwwAndProtocol);
+                webPage = connection.get();
+            } catch (IOException e) {
+                savePageError(currentPage, connection, e.getMessage());
+                return Optional.empty();
+            }
+        }
+
+        return Optional.of(webPage);
+    }
+
     private void saveWebsiteTextToFile(Document webPage, String url, Website currentWebsite) throws IOException {
         String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
         String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
@@ -145,7 +179,40 @@ public class ScraperService {
         if (!directory.exists()) {
             directory.mkdirs();
         }
-        String fileName = workingDirectory + "/" + url + "_" + currentWebsite.getWebsiteId() + ".txt";
+        String fileName = workingDirectory + "/" + url + "_website_" + currentWebsite.getWebsiteId() + ".txt";
+        File websiteFile = new File(fileName);
+        if (!websiteFile.exists()) {
+            websiteFile.createNewFile();
+        }
+        try (PrintStream out = new PrintStream(new FileOutputStream(websiteFile))) {
+            out.print(webPage.text());
+        }
+    }
+
+    private void savePageTextToFile(Document webPage, String url, Page currentPage) throws IOException {
+        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
+        String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
+        File directory = new File(workingDirectory);
+        if (!directory.exists()) {
+            directory.mkdirs();
+        }
+
+        String fixedUrl = url
+            .replaceAll("\\/", "[]")
+            .replaceAll("\\\\", "][")
+            .replaceAll("\\?", "")
+            .replaceAll(":", "")
+            .replaceAll("<", "")
+            .replaceAll(">", "")
+            .replaceAll("\\|", "")
+            .replaceAll("_", "")
+            .replaceAll("\\*", "")
+            .replaceAll("\"", "");
+
+        int urlLimit = fixedUrl.length() > 180 ? 180 : fixedUrl.length() - 1;
+        String lengthLimitedUrl = fixedUrl.substring(0, urlLimit);
+
+        String fileName = workingDirectory + "/" + lengthLimitedUrl + "_page_" + currentPage.getPageId() + ".txt";
         File websiteFile = new File(fileName);
         if (!websiteFile.exists()) {
             websiteFile.createNewFile();
@@ -162,6 +229,15 @@ public class ScraperService {
             currentWebsite.setLastResponseCode(connection.response().statusCode());
         }
         websiteRepository.save(currentWebsite);
+    }
+
+    private void savePageError(Page currentPage, Connection connection, String errorMessage) {
+        currentPage.setError(errorMessage);
+        currentPage.setLastCheckedOn(LocalDateTime.now());
+        if (connection != null) {
+            currentPage.setLastResponseCode(connection.response().statusCode());
+        }
+        pageRepository.save(currentPage);
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)

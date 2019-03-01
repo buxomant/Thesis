@@ -1,8 +1,10 @@
 package com.cbp.app.service;
 
-import com.cbp.app.model.db.WebsiteTextSimilarity;
-import com.cbp.app.repository.WebsiteTextSimilarityRepository;
+import com.cbp.app.model.db.TextSimilarity;
+import com.cbp.app.repository.TextSimilarityRepository;
+import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.ro.RomanianAnalyzer;
+import org.apache.lucene.analysis.shingle.ShingleAnalyzerWrapper;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.index.*;
 import org.apache.lucene.queries.mlt.MoreLikeThis;
@@ -27,46 +29,62 @@ import static com.cbp.app.service.IndexService.WEBSITE_STORAGE_PATH;
 
 @Service
 public class ComparisonService {
-    private final WebsiteTextSimilarityRepository websiteTextSimilarityRepository;
+    private final TextSimilarityRepository textSimilarityRepository;
 
-    private static int MAX_HITS = 100;
+    private static int MAX_HITS = 1000;
 
     @Autowired
-    public ComparisonService(WebsiteTextSimilarityRepository websiteTextSimilarityRepository) {
-        this.websiteTextSimilarityRepository = websiteTextSimilarityRepository;
+    public ComparisonService(TextSimilarityRepository textSimilarityRepository) {
+        this.textSimilarityRepository = textSimilarityRepository;
     }
 
     public void compareDocuments() throws IOException {
-        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
+//        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
+        String dateAndHour = "2019-02-27_07";
         Path workingDirectoryPath = Paths.get(WEBSITE_STORAGE_PATH + "/" + dateAndHour);
 
         Directory workingDirectory = FSDirectory.open(workingDirectoryPath);
         IndexReader indexReader = DirectoryReader.open(workingDirectory);
         IndexSearcher indexSearcher = new IndexSearcher(indexReader);
 
-        List<WebsiteTextSimilarity> allSimilarities = new ArrayList<>();
+        List<TextSimilarity> allSimilarities = new ArrayList<>();
 
         AtomicInteger docId = new AtomicInteger(0);
         for (int currentDocumentId = 0; currentDocumentId < indexReader.maxDoc(); currentDocumentId++) {
             int tempDocId = docId.getAndIncrement(); // qq refactor
             Document currentDocument = indexReader.document(currentDocumentId);
-            int currentWebsiteId = Integer.parseInt(currentDocument.getField("websiteId").stringValue());
+            int currentId = Integer.parseInt(currentDocument.getField("id").stringValue());
+            String currentType = currentDocument.getField("type").stringValue();
+            String currentUrl = currentDocument.getField("url").stringValue();
+            String currentTopDomain = urlToTopDomain(currentUrl);
 
+            Analyzer analyzer = new RomanianAnalyzer();
+            ShingleAnalyzerWrapper shingleAnalyzerWrapper = new ShingleAnalyzerWrapper(analyzer, 3, 3, " ", false, false, "_");
             MoreLikeThis moreLikeThis = new MoreLikeThis(indexReader);
-            moreLikeThis.setFieldNames(new String[] { "websiteText" });
-            moreLikeThis.setAnalyzer(new RomanianAnalyzer());
+            moreLikeThis.setFieldNames(new String[] { "text" });
+            moreLikeThis.setAnalyzer(shingleAnalyzerWrapper);
+            moreLikeThis.setMaxQueryTerms(1000);
 
             Query query = moreLikeThis.like(currentDocumentId);
 
             TopDocs result = indexSearcher.search(query, MAX_HITS);
-            List<WebsiteTextSimilarity> similarities = Arrays.stream(result.scoreDocs)
+            List<TextSimilarity> similarities = Arrays.stream(result.scoreDocs)
                 .filter(scoreDoc -> scoreDoc.doc > tempDocId)
+                .filter(scoreDoc -> scoreDoc.score / result.getMaxScore() > 0.5F)
                 .map(scoreDoc -> {
                     try {
                         Document otherDocument = indexReader.document(scoreDoc.doc);
-                        int otherWebsiteId = Integer.parseInt(otherDocument.getField("websiteId").stringValue());
+                        int otherId = Integer.parseInt(otherDocument.getField("id").stringValue());
+                        String otherUrl = otherDocument.getField("url").stringValue();
+                        String otherType = otherDocument.getField("type").stringValue();
+                        String otherTopDomain = urlToTopDomain(otherUrl);
+
+                        if (currentTopDomain.equals(otherTopDomain)) {
+                            return null;
+                        }
+
                         Float coefficient = scoreDoc.score / result.getMaxScore();
-                        return new WebsiteTextSimilarity(currentWebsiteId, otherWebsiteId, dateAndHour, coefficient);
+                        return new TextSimilarity(currentId, otherId, dateAndHour, currentType, otherType, coefficient);
                     } catch (IOException e) {
                         e.printStackTrace();
                         return null;
@@ -78,7 +96,13 @@ public class ComparisonService {
             allSimilarities.addAll(similarities);
         }
 
-        websiteTextSimilarityRepository.deleteAll();
-        websiteTextSimilarityRepository.saveAll(allSimilarities);
+        textSimilarityRepository.deleteAll();
+        textSimilarityRepository.saveAll(allSimilarities);
+    }
+
+    private static String urlToTopDomain(String url) {
+        String baseUrl = url.split("\\[]")[0];
+        String[] baseUrlSplit = baseUrl.split("\\.");
+        return baseUrlSplit[baseUrlSplit.length - 2] + "." + baseUrlSplit[baseUrlSplit.length - 1];
     }
 }

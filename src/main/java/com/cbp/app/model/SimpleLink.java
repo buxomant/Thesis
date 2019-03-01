@@ -23,6 +23,7 @@ public class SimpleLink {
             .map(LinkService::stripAnchorString)
             .map(LinkService::stripQueryString)
             .map(LinkService::stripAsteriskString)
+            .map(LinkService::trimNonAlphanumericContent)
             .collect(Collectors.toList())
             .get(0);
     }

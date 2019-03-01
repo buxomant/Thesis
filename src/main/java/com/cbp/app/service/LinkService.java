@@ -98,7 +98,7 @@ public class LinkService {
     }
 
     public static List<SimpleLink> domLinksToSimpleLinks(Elements linkElements, String currentWebsiteUrl) {
-        return linkElements.stream()
+        return linkElements.parallelStream()
             .map(link -> new SimpleLink(link.text(), link.attr("href")))
             .filter(link -> LinkService.isNotIPOrPhoneNumber(link.getLinkUrl()))
             .filter(link -> LinkService.isValidWebUrl(link.getLinkUrl()))

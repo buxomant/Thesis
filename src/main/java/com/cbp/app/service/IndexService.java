@@ -1,8 +1,15 @@
 package com.cbp.app.service;
 
+import com.cbp.app.helper.LoggingHelper;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.ro.RomanianAnalyzer;
+import org.apache.lucene.analysis.shingle.ShingleAnalyzerWrapper;
 import org.apache.lucene.document.*;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.FSDirectory;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -10,11 +17,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
+import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.LocalTime;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,17 +27,51 @@ public class IndexService {
     public static final String WEBSITE_STORAGE_PATH = "./website-storage";
     public static final String DATE_AND_HOUR_PATTERN = "yyyy-MM-dd_HH";
 
+    private final ComparisonService comparisonService;
+
+    public IndexService(ComparisonService comparisonService) {
+        this.comparisonService = comparisonService;
+    }
+
+    public void indexAndCompareWebsites() throws IOException {
+        LocalTime startTime = LoggingHelper.logStartOfMethod("indexAndCompareWebsites");
+
+//        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
+        String dateAndHour = "2019-02-27_07";
+        String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
+        Path documentsPath = Paths.get(workingDirectory);
+
+        Directory directory = FSDirectory.open(Paths.get(workingDirectory));
+
+        Analyzer analyzer = new RomanianAnalyzer();
+        ShingleAnalyzerWrapper shingleAnalyzerWrapper = new ShingleAnalyzerWrapper(analyzer, 3, 3, " ", false, false, "_");
+
+        IndexWriterConfig indexWriterConfig = new IndexWriterConfig(shingleAnalyzerWrapper);
+        indexWriterConfig.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
+
+        IndexWriter indexWriter = new IndexWriter(directory, indexWriterConfig);
+        indexWriter.deleteAll();
+        indexDocs(indexWriter, documentsPath);
+
+        indexWriter.forceMerge(1);
+        indexWriter.close();
+
+        comparisonService.compareDocuments();
+
+        LoggingHelper.logEndOfMethod("indexAndCompareWebsites", startTime);
+    }
+
     public static void indexDocs(final IndexWriter writer, Path path) throws IOException {
         if (Files.isDirectory(path)) {
             Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
                 @Override
                 public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                    try {
-                        indexDoc(writer, file);
-                    } catch (IOException ignore) {
-                        // don't index files that can't be read.
-                    }
-                    return FileVisitResult.CONTINUE;
+                try {
+                    indexDoc(writer, file);
+                } catch (IOException ignore) {
+                    // don't index files that can't be read.
+                }
+                return FileVisitResult.CONTINUE;
                 }
             });
         } else {
@@ -41,10 +80,7 @@ public class IndexService {
     }
 
     private static void indexDoc(IndexWriter indexWriter, Path file) throws IOException {
-        String fullFilePath = file.toString();
-
-        if (!fullFilePath.endsWith(".txt")) {
-            System.out.println("*** skipping non-text file");
+        if (!file.toString().endsWith(".txt")) {
             return;
         }
 
@@ -52,21 +88,22 @@ public class IndexService {
         String fileName = splitDirectoryPath[splitDirectoryPath.length - 1];
         String[] splitFileName = fileName.split("_");
         String websiteUrl = splitFileName[0];
-        String websiteId = splitFileName[1];
+        String websiteOrPage = splitFileName[1];
+        String websiteId = splitFileName[2];
 
         try (InputStream stream = Files.newInputStream(file)) {
             Document document = new Document();
             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
             String websiteText = bufferedReader.lines().collect(Collectors.joining("\n"));
 
-            Field websiteUrlField = new Field("websiteUrl", websiteUrl, getFieldType());
-            Field websiteIdField = new Field("websiteId", websiteId, getFieldType());
-            Field websiteTextField = new Field("websiteText", websiteText, getFieldType());
-            document.add(websiteUrlField);
-            document.add(websiteIdField);
-            document.add(websiteTextField);
-
-            System.out.println("*** adding to index " + file);
+            Field urlField = new Field("url", websiteUrl, getFieldType());
+            Field idField = new Field("id", websiteId, getFieldType());
+            Field typeField = new Field("type", websiteOrPage, getFieldType());
+            Field textField = new Field("text", websiteText, getFieldType());
+            document.add(urlField);
+            document.add(idField);
+            document.add(typeField);
+            document.add(textField);
             indexWriter.addDocument(document);
         }
     }

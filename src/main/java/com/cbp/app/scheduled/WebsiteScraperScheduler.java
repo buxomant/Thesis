@@ -2,16 +2,13 @@ package com.cbp.app.scheduled;
 
 import com.cbp.app.helper.LoggingHelper;
 import com.cbp.app.helper.TimeLimitedRepeater;
+import com.cbp.app.model.db.Page;
 import com.cbp.app.model.db.Website;
+import com.cbp.app.repository.PageRepository;
 import com.cbp.app.repository.WebsiteRepository;
-import com.cbp.app.service.ComparisonService;
+import com.cbp.app.service.IndexService;
 import com.cbp.app.service.ScraperService;
-import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.ro.RomanianAnalyzer;
-import org.apache.lucene.index.IndexWriter;
-import org.apache.lucene.index.IndexWriterConfig;
-import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.FSDirectory;
+import net.javacrumbs.shedlock.core.SchedulerLock;
 import org.jsoup.nodes.Document;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,29 +18,19 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.*;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-
-import static com.cbp.app.service.IndexService.DATE_AND_HOUR_PATTERN;
-import static com.cbp.app.service.IndexService.WEBSITE_STORAGE_PATH;
-import static com.cbp.app.service.IndexService.indexDocs;
 
 @Component
 public class WebsiteScraperScheduler {
 
     private final WebsiteRepository websiteRepository;
+    private final PageRepository pageRepository;
     private final ScraperService scraperService;
-    private final ComparisonService comparisonService;
+    private final IndexService indexService;
     private final boolean fetchWebsitesJobEnabled;
     private final boolean processWebsitesJobEnabled;
     private final boolean fixDuplicateWebsitesJobEnabled;
@@ -52,84 +39,116 @@ public class WebsiteScraperScheduler {
     @Autowired
     public WebsiteScraperScheduler(
         WebsiteRepository websiteRepository,
+        PageRepository pageRepository,
         ScraperService scraperService,
-        ComparisonService comparisonService,
+        IndexService indexService,
         @Value("${fetch-websites-scheduler.enabled}") boolean fetchWebsitesJobEnabled,
         @Value("${process-websites-scheduler.enabled}") boolean processWebsitesJobEnabled,
         @Value("${fix-duplicate-websites-scheduler.enabled}") boolean fixDuplicateWebsitesJobEnabled,
         @Value("${establish-subdomain-relationships.enabled}") boolean establishSubdomainRelationshipsJobEnabled
     ) {
         this.websiteRepository = websiteRepository;
+        this.pageRepository = pageRepository;
         this.scraperService = scraperService;
-        this.comparisonService = comparisonService;
+        this.indexService = indexService;
         this.fetchWebsitesJobEnabled = fetchWebsitesJobEnabled;
         this.processWebsitesJobEnabled = processWebsitesJobEnabled;
         this.fixDuplicateWebsitesJobEnabled = fixDuplicateWebsitesJobEnabled;
         this.establishSubdomainRelationshipsJobEnabled = establishSubdomainRelationshipsJobEnabled;
     }
 
-    @Scheduled(fixedRate = 60 * 1000)
+//    @Scheduled(fixedRate = 60 * 60 * 1000)
+    @SchedulerLock(name = "fetchWebsitesContent")
     public void fetchWebsitesContent() throws IOException, ExecutionException, InterruptedException {
         if (fetchWebsitesJobEnabled) {
-            LocalTime startTime = LoggingHelper.logStartOfMethod("fetchWebsitesContent (parallel)");
+            LocalTime startTime = LoggingHelper.logStartOfMethod("fetch websites (parallel)");
 
             List<Website> nextUncheckedWebsites = websiteRepository.getNextDomesticWebsitesThatNeedFetching();
 
-            Map<Website, Optional<Document>> webPagesByWebsite = nextUncheckedWebsites.parallelStream()
+            Map<Website, Document> successfulWebsites = nextUncheckedWebsites.parallelStream()
                 .collect(Collectors.toMap(
                     Function.identity(),
                     scraperService::getWebPageIfUrlReachable
-                ));
+                ))
+                .entrySet().stream()
+                .filter(entry -> entry.getValue().isPresent())
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get()));
 
-            webPagesByWebsite.forEach((website, webPage) ->
-                webPage.ifPresent(document -> scraperService.storeWebsiteContent(website, document))
-            );
+            successfulWebsites.entrySet().parallelStream()
+                .forEach(entry -> scraperService.storeWebsiteContent(entry.getKey(), entry.getValue()));
 
             LoggingHelper.logEndOfMethod(
-                "fetchWebsitesContent (" + nextUncheckedWebsites.size() + " websites in parallel)",
+                "fetch websites (got " + successfulWebsites.size() + " out of " + nextUncheckedWebsites.size() + " websites in parallel)",
                 startTime
             );
+
+            LocalTime startTimePageProcessing = LoggingHelper.logStartOfMethod("fetch pages (processing)");
+
+            List<Page> nextUncheckedPages = pageRepository.getNextDomesticPagesThatNeedFetching();
+            Map<Page, String> baseUrlToPages = nextUncheckedPages.stream()
+                .collect(Collectors.toMap(Function.identity(), page -> page.getUrl().split("/")[0]));
+
+            List<String> distinctBaseUrls = baseUrlToPages.values().stream().distinct().collect(Collectors.toList());
+
+            List<List<Page>> listsOfListsOfPages = new ArrayList<>();
+
+            while (baseUrlToPages.size() > 0) {
+                List<Page> pages = distinctBaseUrls.stream().map(baseUrl -> {
+                    Optional<Map.Entry<Page, String>> entryOptional = baseUrlToPages.entrySet().stream()
+                        .filter(entry -> entry.getValue().equals(baseUrl)).findFirst();
+                    entryOptional.ifPresent(stringPageEntry -> baseUrlToPages.remove(stringPageEntry.getKey()));
+                    return entryOptional;
+                })
+                .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toList());
+                listsOfListsOfPages.add(pages);
+            }
+
+            LoggingHelper.logEndOfMethod("fetch pages (done processing)", startTimePageProcessing);
+
+            LocalTime startTimePages = LoggingHelper.logStartOfMethod("fetch pages (parallel)");
+
+            listsOfListsOfPages.forEach(listOfPages -> {
+                LocalTime startTimePageIteration = LoggingHelper.logStartOfMethod("fetch pages (iteration)");
+
+                Map<Page, Document> successfulPages = listOfPages.parallelStream()
+                    .collect(Collectors.toMap(
+                        Function.identity(),
+                        scraperService::getWebPageIfUrlReachable
+                    ))
+                    .entrySet().stream()
+                    .filter(entry -> entry.getValue().isPresent())
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get()));
+
+                successfulPages.entrySet().parallelStream()
+                    .forEach(entry -> scraperService.storePageContent(entry.getKey(), entry.getValue()));
+
+                LoggingHelper.logEndOfMethod(
+                    "fetch pages (got " + successfulPages.size() + " out of " + listOfPages.size() + " pages in parallel)",
+                    startTimePageIteration
+                );
+            });
+
+            LoggingHelper.logEndOfMethod("fetch pages (parallel)", startTimePages);
         }
     }
 
-    @Scheduled(fixedRate = 60 * 1000)
+    @Scheduled(fixedRate = 60 * 60 * 1000)
+    @SchedulerLock(name = "processWebsites")
     public void processWebsites() throws IOException {
         if (processWebsitesJobEnabled) {
-            Queue<Website> nextUnprocessedWebsites = new LinkedList<>(
-                websiteRepository.getNextDomesticWebsitesThatNeedProcessing()
-            );
+//            Queue<Website> nextUnprocessedWebsites = new LinkedList<>(
+//                websiteRepository.getNextDomesticWebsitesThatNeedProcessing()
+//            );
+//
+//            TimeLimitedRepeater
+//                .repeat(() -> scraperService.processWebsite(nextUnprocessedWebsites))
+//                .repeatWithDefaultTimeLimit();
 
-            TimeLimitedRepeater
-                .repeat(() -> scraperService.processWebsite(nextUnprocessedWebsites))
-                .repeatWithDefaultTimeLimit();
-
-            indexAndCompareWebsites();
+            indexService.indexAndCompareWebsites();
         }
-    }
-
-    private void indexAndCompareWebsites() throws IOException {
-        LocalTime startTime = LoggingHelper.logStartOfMethod("indexAndCompareWebsites");
-
-        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
-        String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
-        Path documentsPath = Paths.get(workingDirectory);
-
-        Directory directory = FSDirectory.open(Paths.get(workingDirectory));
-
-        Analyzer analyzer = new RomanianAnalyzer();
-        IndexWriterConfig indexWriterConfig = new IndexWriterConfig(analyzer);
-        indexWriterConfig.setOpenMode(IndexWriterConfig.OpenMode.CREATE_OR_APPEND);
-
-        IndexWriter indexWriter = new IndexWriter(directory, indexWriterConfig);
-        indexWriter.deleteAll();
-
-        indexDocs(indexWriter, documentsPath);
-        indexWriter.forceMerge(1);
-        indexWriter.close();
-
-        comparisonService.compareDocuments();
-
-        LoggingHelper.logEndOfMethod("indexAndCompareWebsites", startTime);
     }
 
     @Scheduled(fixedRate = 1000)
