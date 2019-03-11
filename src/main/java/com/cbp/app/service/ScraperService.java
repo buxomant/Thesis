@@ -47,6 +47,8 @@ public class ScraperService {
     private final PageToPageRepository pageToPageRepository;
     private final SubdomainOfRepository subdomainOfRepository;
 
+    private static final int TIMEOUT_IN_MILLIS = 1;
+
     @Autowired
     public ScraperService(
         WebsiteRepository websiteRepository,
@@ -119,7 +121,7 @@ public class ScraperService {
         urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
 
         try {
-            connection = Jsoup.connect(urlIncludingWwwAndProtocol).timeout(2 * 1000);
+            connection = Jsoup.connect(urlIncludingWwwAndProtocol).timeout(TIMEOUT_IN_MILLIS);
             webPage = connection.get();
         } catch (HttpStatusException | SSLException | SocketException | SocketTimeoutException e) {
             urlIncludingWwwAndProtocol = "http://" + urlIncludingWww;
@@ -150,7 +152,7 @@ public class ScraperService {
         urlIncludingWwwAndProtocol = "https://" + urlIncludingWww;
 
         try {
-            connection = Jsoup.connect(urlIncludingWwwAndProtocol).timeout(2 * 1000);
+            connection = Jsoup.connect(urlIncludingWwwAndProtocol).timeout(TIMEOUT_IN_MILLIS);
             webPage = connection.get();
         } catch (HttpStatusException | SSLException | SocketException | SocketTimeoutException e) {
             urlIncludingWwwAndProtocol = "http://" + urlIncludingWww;
@@ -209,7 +211,7 @@ public class ScraperService {
             .replaceAll("\\*", "")
             .replaceAll("\"", "");
 
-        int urlLimit = fixedUrl.length() > 180 ? 180 : fixedUrl.length() - 1;
+        int urlLimit = fixedUrl.length() > 180 ? 180 : fixedUrl.length();
         String lengthLimitedUrl = fixedUrl.substring(0, urlLimit);
 
         String fileName = workingDirectory + "/" + lengthLimitedUrl + "_page_" + currentPage.getPageId() + ".txt";
@@ -290,6 +292,7 @@ public class ScraperService {
 
         List<WebsiteToWebsite> websiteToWebsites = createWebsiteToWebsiteLinks(websitesByLinkTitle, websiteContent);
         websiteToWebsiteRepository.saveAll(websiteToWebsites);
+//        websiteToWebsites.forEach(websiteToWebsiteRepository::save);
 
         List<Website> allWebsites = new ArrayList<>();
         allWebsites.addAll(existingWebsites);
@@ -329,6 +332,7 @@ public class ScraperService {
 
         List<PageToPage> pageToPages = createPageToPageLinks(pagesByLinkTitle, savedCurrentPage, pagesMatchingUrl, websiteContent);
         pageToPageRepository.saveAll(pageToPages);
+//        pageToPages.forEach(pageToPageRepository::save);
     }
 
     private static Page updateLastSeenToNow(Page page) {

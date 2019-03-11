@@ -19,13 +19,19 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.stream.Collectors;
 
 @Service
 public class IndexService {
     public static final String WEBSITE_STORAGE_PATH = "./website-storage";
     public static final String DATE_AND_HOUR_PATTERN = "yyyy-MM-dd_HH";
+    public static final String FIELD_URL = "url";
+    public static final String FIELD_ID = "id";
+    public static final String FIELD_TYPE = "type";
+    public static final String FIELD_TEXT = "text";
 
     private final ComparisonService comparisonService;
 
@@ -36,8 +42,8 @@ public class IndexService {
     public void indexAndCompareWebsites() throws IOException {
         LocalTime startTime = LoggingHelper.logStartOfMethod("indexAndCompareWebsites");
 
-//        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
-        String dateAndHour = "2019-02-27_07";
+        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
+//        String dateAndHour = "2019-02-27_07";
         String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
         Path documentsPath = Paths.get(workingDirectory);
 
@@ -56,7 +62,7 @@ public class IndexService {
         indexWriter.forceMerge(1);
         indexWriter.close();
 
-        comparisonService.compareDocuments();
+        comparisonService.compareDocuments(dateAndHour);
 
         LoggingHelper.logEndOfMethod("indexAndCompareWebsites", startTime);
     }
@@ -96,10 +102,10 @@ public class IndexService {
             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
             String websiteText = bufferedReader.lines().collect(Collectors.joining("\n"));
 
-            Field urlField = new Field("url", websiteUrl, getFieldType());
-            Field idField = new Field("id", websiteId, getFieldType());
-            Field typeField = new Field("type", websiteOrPage, getFieldType());
-            Field textField = new Field("text", websiteText, getFieldType());
+            Field urlField = new Field(FIELD_URL, websiteUrl, getFieldType());
+            Field idField = new Field(FIELD_ID, websiteId, getFieldType());
+            Field typeField = new Field(FIELD_TYPE, websiteOrPage, getFieldType());
+            Field textField = new Field(FIELD_TEXT, websiteText, getFieldType());
             document.add(urlField);
             document.add(idField);
             document.add(typeField);

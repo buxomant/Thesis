@@ -17,15 +17,12 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-
-import static com.cbp.app.service.IndexService.DATE_AND_HOUR_PATTERN;
-import static com.cbp.app.service.IndexService.WEBSITE_STORAGE_PATH;
+import static com.cbp.app.service.IndexService.*;
 
 @Service
 public class ComparisonService {
@@ -38,9 +35,8 @@ public class ComparisonService {
         this.textSimilarityRepository = textSimilarityRepository;
     }
 
-    public void compareDocuments() throws IOException {
-//        String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
-        String dateAndHour = "2019-02-27_07";
+    public void compareDocuments(String dateAndHour) throws IOException {
+//        currentDirectory = "2019-02-27_07";
         Path workingDirectoryPath = Paths.get(WEBSITE_STORAGE_PATH + "/" + dateAndHour);
 
         Directory workingDirectory = FSDirectory.open(workingDirectoryPath);
@@ -53,15 +49,15 @@ public class ComparisonService {
         for (int currentDocumentId = 0; currentDocumentId < indexReader.maxDoc(); currentDocumentId++) {
             int tempDocId = docId.getAndIncrement(); // qq refactor
             Document currentDocument = indexReader.document(currentDocumentId);
-            int currentId = Integer.parseInt(currentDocument.getField("id").stringValue());
-            String currentType = currentDocument.getField("type").stringValue();
-            String currentUrl = currentDocument.getField("url").stringValue();
+            int currentId = Integer.parseInt(currentDocument.getField(FIELD_ID).stringValue());
+            String currentType = currentDocument.getField(FIELD_TYPE).stringValue();
+            String currentUrl = currentDocument.getField(FIELD_URL).stringValue();
             String currentTopDomain = urlToTopDomain(currentUrl);
 
             Analyzer analyzer = new RomanianAnalyzer();
             ShingleAnalyzerWrapper shingleAnalyzerWrapper = new ShingleAnalyzerWrapper(analyzer, 3, 3, " ", false, false, "_");
             MoreLikeThis moreLikeThis = new MoreLikeThis(indexReader);
-            moreLikeThis.setFieldNames(new String[] { "text" });
+            moreLikeThis.setFieldNames(new String[] { FIELD_TEXT });
             moreLikeThis.setAnalyzer(shingleAnalyzerWrapper);
             moreLikeThis.setMaxQueryTerms(1000);
 
@@ -96,13 +92,16 @@ public class ComparisonService {
             allSimilarities.addAll(similarities);
         }
 
-        textSimilarityRepository.deleteAll();
         textSimilarityRepository.saveAll(allSimilarities);
     }
 
     private static String urlToTopDomain(String url) {
         String baseUrl = url.split("\\[]")[0];
-        String[] baseUrlSplit = baseUrl.split("\\.");
-        return baseUrlSplit[baseUrlSplit.length - 2] + "." + baseUrlSplit[baseUrlSplit.length - 1];
+        if (Pattern.compile(".*\\..*.*\\..*.*").matcher(baseUrl).matches()) {
+            String[] baseUrlSplit = baseUrl.split("\\.");
+            return baseUrlSplit[baseUrlSplit.length - 2] + "." + baseUrlSplit[baseUrlSplit.length - 1];
+        } else {
+            return baseUrl;
+        }
     }
 }

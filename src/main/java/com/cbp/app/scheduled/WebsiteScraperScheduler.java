@@ -21,6 +21,7 @@ import java.io.*;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -35,6 +36,8 @@ public class WebsiteScraperScheduler {
     private final boolean processWebsitesJobEnabled;
     private final boolean fixDuplicateWebsitesJobEnabled;
     private final boolean establishSubdomainRelationshipsJobEnabled;
+
+    private static final int PAGE_LIST_NUMBER_THRESHOLD = 200;
 
     @Autowired
     public WebsiteScraperScheduler(
@@ -57,15 +60,79 @@ public class WebsiteScraperScheduler {
         this.establishSubdomainRelationshipsJobEnabled = establishSubdomainRelationshipsJobEnabled;
     }
 
-//    @Scheduled(fixedRate = 60 * 60 * 1000)
+    @Scheduled(fixedRate = 60 * 60 * 1000)
     @SchedulerLock(name = "fetchWebsitesContent")
     public void fetchWebsitesContent() throws IOException, ExecutionException, InterruptedException {
         if (fetchWebsitesJobEnabled) {
-            LocalTime startTime = LoggingHelper.logStartOfMethod("fetch websites (parallel)");
+            fetchWebsites();
+            fetchPages();
+            processWebsites();
+            indexService.indexAndCompareWebsites();
+        }
+    }
 
-            List<Website> nextUncheckedWebsites = websiteRepository.getNextDomesticWebsitesThatNeedFetching();
+    private void fetchWebsites() {
+        LocalTime startTime = LoggingHelper.logStartOfMethod("fetch websites (parallel)");
 
-            Map<Website, Document> successfulWebsites = nextUncheckedWebsites.parallelStream()
+        List<Website> nextUncheckedWebsites = websiteRepository.getNextDomesticWebsitesThatNeedFetching();
+
+        Map<Website, Document> successfulWebsites = nextUncheckedWebsites.parallelStream() // qq parallelStream
+            .collect(Collectors.toMap(
+                Function.identity(),
+                scraperService::getWebPageIfUrlReachable
+            ))
+            .entrySet().stream()
+            .filter(entry -> entry.getValue().isPresent())
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get()));
+
+        successfulWebsites.entrySet().parallelStream() // qq parallelStream
+            .forEach(entry -> scraperService.storeWebsiteContent(entry.getKey(), entry.getValue()));
+
+        LoggingHelper.logEndOfMethod(
+            "fetch websites (got " + successfulWebsites.size() + " out of " + nextUncheckedWebsites.size() + " websites in parallel)",
+            startTime
+        );
+    }
+
+    private void fetchPages() throws IOException {
+        LocalTime startTimePageProcessing = LoggingHelper.logStartOfMethod("fetch pages (processing)");
+
+        List<Page> nextUncheckedPages = pageRepository.getNextDomesticPagesThatNeedFetching();
+
+        Map<Page, String> baseUrlToPages = nextUncheckedPages.stream()
+            .collect(Collectors.toMap(Function.identity(), page -> page.getUrl().split("/")[0]));
+
+        List<String> distinctBaseUrls = baseUrlToPages.values().stream().distinct().collect(Collectors.toList());
+
+        List<List<Page>> listsOfListsOfPages = new ArrayList<>();
+
+        while (baseUrlToPages.size() > 0) {
+            List<Page> pages = distinctBaseUrls.stream().map(baseUrl -> {
+                Optional<Map.Entry<Page, String>> entryOptional = baseUrlToPages.entrySet().stream()
+                    .filter(entry -> entry.getValue().equals(baseUrl)).findFirst();
+                entryOptional.ifPresent(stringPageEntry -> baseUrlToPages.remove(stringPageEntry.getKey()));
+                return entryOptional;
+            })
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+
+            if (pages.size() >= PAGE_LIST_NUMBER_THRESHOLD) {
+                listsOfListsOfPages.add(pages);
+            }
+        }
+
+        LoggingHelper.logEndOfMethod("fetch pages (done processing)", startTimePageProcessing);
+
+        LocalTime startTimePages = LoggingHelper.logStartOfMethod("fetch pages (parallel)");
+
+        AtomicInteger totalPages = new AtomicInteger(0);
+        AtomicInteger totalSuccessfulPages = new AtomicInteger(0);
+        listsOfListsOfPages.forEach(listOfPages -> {
+            LocalTime startTimePageIteration = LoggingHelper.logStartOfMethod("fetch pages (iteration)");
+
+            Map<Page, Document> successfulPages = listOfPages.parallelStream()
                 .collect(Collectors.toMap(
                     Function.identity(),
                     scraperService::getWebPageIfUrlReachable
@@ -74,80 +141,36 @@ public class WebsiteScraperScheduler {
                 .filter(entry -> entry.getValue().isPresent())
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get()));
 
-            successfulWebsites.entrySet().parallelStream()
-                .forEach(entry -> scraperService.storeWebsiteContent(entry.getKey(), entry.getValue()));
+            successfulPages.entrySet().parallelStream()
+                .forEach(entry -> scraperService.storePageContent(entry.getKey(), entry.getValue()));
+
+            totalPages.addAndGet(listOfPages.size());
+            totalSuccessfulPages.addAndGet(successfulPages.size());
 
             LoggingHelper.logEndOfMethod(
-                "fetch websites (got " + successfulWebsites.size() + " out of " + nextUncheckedWebsites.size() + " websites in parallel)",
-                startTime
+                "fetch pages (got " + successfulPages.size() + " out of " + listOfPages.size() + " pages this iteration)",
+                startTimePageIteration
             );
+        });
 
-            LocalTime startTimePageProcessing = LoggingHelper.logStartOfMethod("fetch pages (processing)");
-
-            List<Page> nextUncheckedPages = pageRepository.getNextDomesticPagesThatNeedFetching();
-            Map<Page, String> baseUrlToPages = nextUncheckedPages.stream()
-                .collect(Collectors.toMap(Function.identity(), page -> page.getUrl().split("/")[0]));
-
-            List<String> distinctBaseUrls = baseUrlToPages.values().stream().distinct().collect(Collectors.toList());
-
-            List<List<Page>> listsOfListsOfPages = new ArrayList<>();
-
-            while (baseUrlToPages.size() > 0) {
-                List<Page> pages = distinctBaseUrls.stream().map(baseUrl -> {
-                    Optional<Map.Entry<Page, String>> entryOptional = baseUrlToPages.entrySet().stream()
-                        .filter(entry -> entry.getValue().equals(baseUrl)).findFirst();
-                    entryOptional.ifPresent(stringPageEntry -> baseUrlToPages.remove(stringPageEntry.getKey()));
-                    return entryOptional;
-                })
-                .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.toList());
-                listsOfListsOfPages.add(pages);
-            }
-
-            LoggingHelper.logEndOfMethod("fetch pages (done processing)", startTimePageProcessing);
-
-            LocalTime startTimePages = LoggingHelper.logStartOfMethod("fetch pages (parallel)");
-
-            listsOfListsOfPages.forEach(listOfPages -> {
-                LocalTime startTimePageIteration = LoggingHelper.logStartOfMethod("fetch pages (iteration)");
-
-                Map<Page, Document> successfulPages = listOfPages.parallelStream()
-                    .collect(Collectors.toMap(
-                        Function.identity(),
-                        scraperService::getWebPageIfUrlReachable
-                    ))
-                    .entrySet().stream()
-                    .filter(entry -> entry.getValue().isPresent())
-                    .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get()));
-
-                successfulPages.entrySet().parallelStream()
-                    .forEach(entry -> scraperService.storePageContent(entry.getKey(), entry.getValue()));
-
-                LoggingHelper.logEndOfMethod(
-                    "fetch pages (got " + successfulPages.size() + " out of " + listOfPages.size() + " pages in parallel)",
-                    startTimePageIteration
-                );
-            });
-
-            LoggingHelper.logEndOfMethod("fetch pages (parallel)", startTimePages);
-        }
+        LoggingHelper.logEndOfMethod("fetch pages (got " + totalSuccessfulPages.get() + " out of " + totalPages.get() + " total pages)", startTimePages);
     }
 
-    @Scheduled(fixedRate = 60 * 60 * 1000)
-    @SchedulerLock(name = "processWebsites")
-    public void processWebsites() throws IOException {
+//    @Scheduled(fixedRate = 60 * 60 * 1000)
+//    @SchedulerLock(name = "processWebsites")
+    private void processWebsites() throws IOException {
         if (processWebsitesJobEnabled) {
-//            Queue<Website> nextUnprocessedWebsites = new LinkedList<>(
-//                websiteRepository.getNextDomesticWebsitesThatNeedProcessing()
-//            );
-//
-//            TimeLimitedRepeater
-//                .repeat(() -> scraperService.processWebsite(nextUnprocessedWebsites))
-//                .repeatWithDefaultTimeLimit();
+            LocalTime startTime = LoggingHelper.logStartOfMethod("processWebsite");
 
-            indexService.indexAndCompareWebsites();
+            Queue<Website> nextUnprocessedWebsites = new LinkedList<>(
+                websiteRepository.getNextDomesticWebsitesThatNeedProcessing()
+            );
+
+            TimeLimitedRepeater
+                .repeat(() -> scraperService.processWebsite(nextUnprocessedWebsites))
+                .repeatWithDefaultTimeLimit();
+
+            LoggingHelper.logEndOfMethod("processWebsites", startTime);
         }
     }
 
