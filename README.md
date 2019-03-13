@@ -1,4 +1,4 @@
-# ThesisBackend project
+# NewsCompare back-end project
 
 * Install [maven](https://maven.apache.org/)
 * Install [Java 8](http://www.oracle.com/technetwork/java/javase/overview/index.html)
