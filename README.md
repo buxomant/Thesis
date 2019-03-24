@@ -12,3 +12,8 @@ It also allows testing of Ansible deployment and provisioning scripts locally.
 * Install [virtualbox](https://www.virtualbox.org/)
 * From a command line run `vagrant plugin install vagrant-vbguest`
 * From a command line run `vagrant up`
+
+### VM options
+
+Tweak the number of threads assigned to the common pool by setting the Java app to run with the flag 
+`-Djava.util.concurrent.ForkJoinPool.common.parallelism=<NO_OF_THREADS>`, where NO_OF_THREADS can be reasonably set anywhere between 1-100 (depending on target machine).
