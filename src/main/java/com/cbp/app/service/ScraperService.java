@@ -292,7 +292,6 @@ public class ScraperService {
 
         List<WebsiteToWebsite> websiteToWebsites = createWebsiteToWebsiteLinks(websitesByLinkTitle, websiteContent);
         websiteToWebsiteRepository.saveAll(websiteToWebsites);
-//        websiteToWebsites.forEach(websiteToWebsiteRepository::save);
 
         List<Website> allWebsites = new ArrayList<>();
         allWebsites.addAll(existingWebsites);
@@ -332,7 +331,6 @@ public class ScraperService {
 
         List<PageToPage> pageToPages = createPageToPageLinks(pagesByLinkTitle, savedCurrentPage, pagesMatchingUrl, websiteContent);
         pageToPageRepository.saveAll(pageToPages);
-//        pageToPages.forEach(pageToPageRepository::save);
     }
 
     private static Page updateLastSeenToNow(Page page) {

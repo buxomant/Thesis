@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
@@ -107,5 +108,15 @@ public class LinkService {
             .map(link -> LinkService.convertLocalLinks(link, currentWebsiteUrl))
             .distinct()
             .collect(Collectors.toList());
+    }
+
+    public static String urlToTopDomain(String url) {
+        String baseUrl = url.split("\\[]")[0];
+        if (Pattern.compile(".*\\..*.*\\..*.*").matcher(baseUrl).matches()) {
+            String[] baseUrlSplit = baseUrl.split("\\.");
+            return baseUrlSplit[baseUrlSplit.length - 2] + "." + baseUrlSplit[baseUrlSplit.length - 1];
+        } else {
+            return baseUrl;
+        }
     }
 }

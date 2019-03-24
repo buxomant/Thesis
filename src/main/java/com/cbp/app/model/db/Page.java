@@ -29,12 +29,18 @@ public class Page {
     @NotNull
     private LocalDateTime discoveredOn;
 
+    /**
+     * This timestamp should keep track of when a snapshot of this page was last fetched
+     */
     @Column
     private LocalDateTime lastCheckedOn;
 
     @Column
     private LocalDateTime lastProcessedOn;
 
+    /**
+     * This timestamp should keep track of when a link to this page was last 'seen' to exist on its parent website
+     */
     @Column
     private LocalDateTime lastSeen;
 

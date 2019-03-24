@@ -37,7 +37,7 @@ public class WebsiteScraperScheduler {
     private final boolean fixDuplicateWebsitesJobEnabled;
     private final boolean establishSubdomainRelationshipsJobEnabled;
 
-    private static final int PAGE_LIST_NUMBER_THRESHOLD = 200;
+    private static final int PAGE_LIST_NUMBER_THRESHOLD = 100;
 
     @Autowired
     public WebsiteScraperScheduler(
@@ -60,7 +60,7 @@ public class WebsiteScraperScheduler {
         this.establishSubdomainRelationshipsJobEnabled = establishSubdomainRelationshipsJobEnabled;
     }
 
-    @Scheduled(fixedRate = 60 * 60 * 1000)
+    @Scheduled(fixedRate = 4 * 60 * 60 * 1000)
     @SchedulerLock(name = "fetchWebsitesContent")
     public void fetchWebsitesContent() throws IOException, ExecutionException, InterruptedException {
         if (fetchWebsitesJobEnabled) {
@@ -76,7 +76,7 @@ public class WebsiteScraperScheduler {
 
         List<Website> nextUncheckedWebsites = websiteRepository.getNextDomesticWebsitesThatNeedFetching();
 
-        Map<Website, Document> successfulWebsites = nextUncheckedWebsites.parallelStream() // qq parallelStream
+        Map<Website, Document> successfulWebsites = nextUncheckedWebsites.parallelStream()
             .collect(Collectors.toMap(
                 Function.identity(),
                 scraperService::getWebPageIfUrlReachable
@@ -85,7 +85,7 @@ public class WebsiteScraperScheduler {
             .filter(entry -> entry.getValue().isPresent())
             .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().get()));
 
-        successfulWebsites.entrySet().parallelStream() // qq parallelStream
+        successfulWebsites.entrySet().parallelStream()
             .forEach(entry -> scraperService.storeWebsiteContent(entry.getKey(), entry.getValue()));
 
         LoggingHelper.logEndOfMethod(
@@ -126,11 +126,21 @@ public class WebsiteScraperScheduler {
         LoggingHelper.logEndOfMethod("fetch pages (done processing)", startTimePageProcessing);
 
         LocalTime startTimePages = LoggingHelper.logStartOfMethod("fetch pages (parallel)");
+        Random random = new Random();
 
         AtomicInteger totalPages = new AtomicInteger(0);
         AtomicInteger totalSuccessfulPages = new AtomicInteger(0);
-        listsOfListsOfPages.forEach(listOfPages -> {
+        listsOfListsOfPages.parallelStream().forEach(listOfPages -> {
+
             LocalTime startTimePageIteration = LoggingHelper.logStartOfMethod("fetch pages (iteration)");
+
+            try {
+                long sleepTime = random.nextInt(100) * 100;
+                LoggingHelper.logMessage("=== Thread sleeping for " + sleepTime + " ms");
+                Thread.sleep(sleepTime);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
 
             Map<Page, Document> successfulPages = listOfPages.parallelStream()
                 .collect(Collectors.toMap(
@@ -156,8 +166,6 @@ public class WebsiteScraperScheduler {
         LoggingHelper.logEndOfMethod("fetch pages (got " + totalSuccessfulPages.get() + " out of " + totalPages.get() + " total pages)", startTimePages);
     }
 
-//    @Scheduled(fixedRate = 60 * 60 * 1000)
-//    @SchedulerLock(name = "processWebsites")
     private void processWebsites() throws IOException {
         if (processWebsitesJobEnabled) {
             LocalTime startTime = LoggingHelper.logStartOfMethod("processWebsite");

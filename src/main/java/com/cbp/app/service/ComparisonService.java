@@ -19,10 +19,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static com.cbp.app.service.IndexService.*;
+import static com.cbp.app.service.LinkService.urlToTopDomain;
 
 @Service
 public class ComparisonService {
@@ -36,7 +36,6 @@ public class ComparisonService {
     }
 
     public void compareDocuments(String dateAndHour) throws IOException {
-//        currentDirectory = "2019-02-27_07";
         Path workingDirectoryPath = Paths.get(WEBSITE_STORAGE_PATH + "/" + dateAndHour);
 
         Directory workingDirectory = FSDirectory.open(workingDirectoryPath);
@@ -93,15 +92,5 @@ public class ComparisonService {
         }
 
         textSimilarityRepository.saveAll(allSimilarities);
-    }
-
-    private static String urlToTopDomain(String url) {
-        String baseUrl = url.split("\\[]")[0];
-        if (Pattern.compile(".*\\..*.*\\..*.*").matcher(baseUrl).matches()) {
-            String[] baseUrlSplit = baseUrl.split("\\.");
-            return baseUrlSplit[baseUrlSplit.length - 2] + "." + baseUrlSplit[baseUrlSplit.length - 1];
-        } else {
-            return baseUrl;
-        }
     }
 }
