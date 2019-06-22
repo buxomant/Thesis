@@ -43,7 +43,6 @@ public class IndexService {
         LocalTime startTime = LoggingHelper.logStartOfMethod("indexAndCompareWebsites");
 
         String dateAndHour = LocalDateTime.now().format(DateTimeFormatter.ofPattern(DATE_AND_HOUR_PATTERN));
-//        String dateAndHour = "2019-02-27_07";
         String workingDirectory = WEBSITE_STORAGE_PATH + "/" + dateAndHour;
         Path documentsPath = Paths.get(workingDirectory);
 

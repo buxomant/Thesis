@@ -24,7 +24,7 @@ public interface PageSimilarityRepository extends JpaRepository<PageSimilarityRe
         "WHERE first_type = 'page' AND second_type = 'page' " +
         "  AND p1.url LIKE '%/%' " +
         "  AND p2.url LIKE '%/%' " +
-        "  AND time_frame = (SELECT MAX(time_frame) FROM text_similarity) " +
+        "  AND time_frame = (SELECT MAX(time_frame) FROM text_similarity WHERE first_type = 'page' AND second_type = 'page') " +
         "  AND length(p1.url) / length(p2.url) BETWEEN 0.5 AND 1.5", nativeQuery = true)
     public List<PageSimilarityResponse> getLatestPageSimilarities();
 }

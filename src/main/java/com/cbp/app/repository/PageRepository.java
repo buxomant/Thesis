@@ -21,7 +21,7 @@ public interface PageRepository extends JpaRepository<Page, Integer> {
     Integer getNumberOfPages();
 
     @Query(value = "SELECT * FROM page" +
-    "  WHERE last_seen > now() - INTERVAL '4' HOUR" +
+    "  WHERE last_seen > now() - INTERVAL '1' HOUR" +
     "  AND split_part(url, '/', 1) IN " +
     "    (SELECT url FROM website WHERE type = 'DOMESTIC' AND content_type = 'NEWS')", nativeQuery = true)
     List<Page> getNextDomesticPagesThatNeedFetching();
